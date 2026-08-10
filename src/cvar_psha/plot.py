@@ -1,0 +1,259 @@
+"""Plot learning curves: CVaR, variance, and ESS vs computational budget."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+from cvar_psha.methods import MethodResult
+
+
+def _aggregate_replications(
+    results: list[MethodResult],
+) -> dict[str, np.ndarray]:
+    """Mean/std over replications that share the same budget grid."""
+    budgets = results[0].metrics["budget"]
+    keys = ("cvar", "variance", "ess")
+    out: dict[str, np.ndarray] = {"budget": budgets}
+    for key in keys:
+        stacked = np.vstack([r.metrics[key] for r in results])
+        out[f"{key}_mean"] = np.nanmean(stacked, axis=0)
+        out[f"{key}_std"] = np.nanstd(stacked, axis=0)
+    return out
+
+
+def plot_analysis_comparisons(
+    method_runs: dict[str, list[MethodResult]],
+    true_cvar: float,
+    output_dir: Path,
+) -> tuple[Path, Path]:
+    """Write the two primary analysis figures: CVaR convergence and ESS vs N."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    palette = {
+        "Naive MC": "#7a7a7a",
+        "q* oracle": "#1f1f1f",
+        "CEM-IS": "#c4a35a",
+        "Flat Exp3": "#6c8ebf",
+        "Flat REINFORCE": "#8eb0d9",
+        "Exp3": "#6c8ebf",
+        "REINFORCE": "#8eb0d9",
+        "Hierarchical": "#c0392b",
+        "CVaR-CPO": "#1a7a4c",
+    }
+
+    # Emphasize Hierarchical vs baselines.
+    highlight = {"Hierarchical", "q* oracle", "Naive MC"}
+
+    # --- Plot 1: CVaR convergence ---
+    fig1, ax1 = plt.subplots(figsize=(8.5, 5.0), constrained_layout=True)
+    for name, runs in method_runs.items():
+        agg = _aggregate_replications(runs)
+        x = agg["budget"]
+        mean = agg["cvar_mean"]
+        std = agg["cvar_std"]
+        color = palette.get(name, None)
+        lw = 2.6 if name in highlight else 1.6
+        alpha_line = 1.0 if name in highlight else 0.85
+        ax1.plot(x, mean, label=name, linewidth=lw, color=color, alpha=alpha_line)
+        ax1.fill_between(x, mean - std, mean + std, alpha=0.12 if name in highlight else 0.06, color=color)
+    ax1.axhline(true_cvar, color="black", linestyle="--", linewidth=1.8, label="True CVaR")
+    ax1.set_title("CVaR convergence vs computational budget")
+    ax1.set_xlabel("Leaf samples N")
+    ax1.set_ylabel("CVaR estimate")
+    ax1.grid(True, alpha=0.3)
+    ax1.legend(fontsize=8, framealpha=0.95)
+    cvar_path = output_dir / "cvar_convergence.png"
+    fig1.savefig(cvar_path, dpi=160)
+    plt.close(fig1)
+
+    # --- Plot 2: ESS (policy collapse diagnostic) ---
+    fig2, ax2 = plt.subplots(figsize=(8.5, 5.0), constrained_layout=True)
+    for name, runs in method_runs.items():
+        agg = _aggregate_replications(runs)
+        x = agg["budget"]
+        mean = agg["ess_mean"]
+        std = agg["ess_std"]
+        color = palette.get(name, None)
+        lw = 2.6 if name in highlight else 1.6
+        alpha_line = 1.0 if name in highlight else 0.85
+        ax2.plot(x, mean, label=name, linewidth=lw, color=color, alpha=alpha_line)
+        ax2.fill_between(x, mean - std, mean + std, alpha=0.12 if name in highlight else 0.06, color=color)
+    ax2.set_title("Effective sample size vs computational budget")
+    ax2.set_xlabel("Leaf samples N")
+    ax2.set_ylabel("ESS")
+    ax2.grid(True, alpha=0.3)
+    ax2.legend(fontsize=8, framealpha=0.95)
+    ess_path = output_dir / "ess_comparison.png"
+    fig2.savefig(ess_path, dpi=160)
+    plt.close(fig2)
+
+    return cvar_path, ess_path
+
+
+def plot_mag_rupture_heatmap(
+    env,
+    method_qs: dict[str, np.ndarray],
+    q_star: np.ndarray,
+    output_dir: Path,
+) -> Path:
+    """Marginal mag × rupture mass heatmaps for selected methods vs q*."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    n_m = len(env.mags)
+    n_r = env.n_rupture_bins
+
+    def marginal(q: np.ndarray) -> np.ndarray:
+        heat = np.zeros((n_m, n_r), dtype=float)
+        for idx, path in enumerate(env.paths):
+            _g, _gmm, m, r = path
+            heat[m, r] += q[idx]
+        s = heat.sum()
+        return heat / s if s > 0 else heat
+
+    panels = [("q*", q_star)] + list(method_qs.items())
+    # Cap panels for readability
+    panels = panels[:5]
+    fig, axes = plt.subplots(1, len(panels), figsize=(3.2 * len(panels), 4.2), constrained_layout=True)
+    if len(panels) == 1:
+        axes = [axes]
+    for ax, (name, q) in zip(axes, panels):
+        heat = marginal(q)
+        im = ax.imshow(heat, aspect="auto", origin="lower", cmap="magma")
+        ax.set_title(name, fontsize=9)
+        ax.set_xlabel("Rupture bin")
+        ax.set_ylabel("Magnitude bin")
+        yt = np.linspace(0, n_m - 1, min(6, n_m)).astype(int)
+        ax.set_yticks(yt)
+        ax.set_yticklabels([f"{env.mags[i]:.1f}" for i in yt], fontsize=7)
+        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    out = output_dir / "fault_mag_mass.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    return out
+
+
+def plot_learning_curves(
+    method_runs: dict[str, list[MethodResult]],
+    true_cvar: float,
+    output_dir: Path,
+    q_star: np.ndarray | None = None,
+    path_labels: list[str] | None = None,
+) -> Path:
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.2), constrained_layout=True)
+    titles = ("CVaR Convergence", "Estimator Variance", "Effective Sample Size")
+    ylabels = ("CVaR estimate", "Rolling variance", "ESS")
+    metric_keys = ("cvar", "variance", "ess")
+
+    for name, runs in method_runs.items():
+        agg = _aggregate_replications(runs)
+        x = agg["budget"]
+        for ax, key, title, ylabel in zip(axes, metric_keys, titles, ylabels):
+            mean = agg[f"{key}_mean"]
+            std = agg[f"{key}_std"]
+            ax.plot(x, mean, label=name, linewidth=2)
+            ax.fill_between(x, mean - std, mean + std, alpha=0.15)
+            ax.set_title(title)
+            ax.set_xlabel("Computational budget N")
+            ax.set_ylabel(ylabel)
+            ax.grid(True, alpha=0.3)
+
+    axes[0].axhline(true_cvar, color="black", linestyle="--", linewidth=1.5, label="True CVaR")
+    axes[0].legend(fontsize=8)
+    axes[1].set_yscale("log")
+    axes[2].legend(fontsize=8)
+
+    fig_path = output_dir / "learning_curves.png"
+    fig.savefig(fig_path, dpi=150)
+    plt.close(fig)
+
+    # Final policy comparison if available.
+    final_qs = {}
+    for name, runs in method_runs.items():
+        qs = [r.final_q for r in runs if r.final_q is not None]
+        if qs:
+            final_qs[name] = np.mean(np.vstack(qs), axis=0)
+
+    if final_qs:
+        plot_final_policies(
+            final_qs,
+            output_dir,
+            q_star=q_star,
+            path_labels=path_labels,
+        )
+
+    return fig_path
+
+
+def plot_final_policies(
+    final_qs: dict[str, np.ndarray],
+    output_dir: Path,
+    q_star: np.ndarray | None = None,
+    path_labels: list[str] | None = None,
+    top_n: int = 15,
+) -> Path:
+    """Bar chart of final path / arm probabilities (top-N when the space is large)."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    n_arms = len(next(iter(final_qs.values())))
+    score = np.zeros(n_arms, dtype=float)
+    if q_star is not None:
+        score = np.maximum(score, np.asarray(q_star, dtype=float))
+    for q in final_qs.values():
+        score = np.maximum(score, np.asarray(q, dtype=float))
+
+    if n_arms > top_n:
+        idx = np.argsort(score)[::-1][:top_n]
+        idx = np.sort(idx)  # keep a stable left-to-right order among the top set
+        # Prefer ranking order for readability
+        idx = np.argsort(score)[::-1][:top_n]
+    else:
+        idx = np.arange(n_arms)
+
+    n_show = len(idx)
+    series = {}
+    if q_star is not None:
+        series["q*"] = np.asarray(q_star, dtype=float)[idx]
+    for name, q in final_qs.items():
+        series[name] = np.asarray(q, dtype=float)[idx]
+
+    if path_labels is not None and len(path_labels) == n_arms:
+        labels = [path_labels[i] for i in idx]
+    elif path_labels is not None and len(path_labels) == n_show:
+        labels = list(path_labels)
+    else:
+        labels = [f"Path {i}" for i in idx]
+
+    fig_w = max(8.0, 0.55 * n_show + 3.0)
+    fig, ax = plt.subplots(figsize=(fig_w, 4.8), constrained_layout=True)
+    x = np.arange(n_show, dtype=float)
+    width = 0.8 / max(len(series), 1)
+    offset = 0.0
+    ymax = 0.0
+    for name, vals in series.items():
+        ax.bar(x + offset, vals, width, label=name)
+        ymax = max(ymax, float(np.max(vals)) if vals.size else 0.0)
+        offset += width
+
+    ax.set_xticks(x + width * (len(series) - 1) / 2.0)
+    ax.set_xticklabels(labels, rotation=55, ha="right", fontsize=7)
+    ax.set_ylabel("Probability")
+    title = "Final / reference sampling distributions"
+    if n_arms > top_n:
+        title += f" (top {top_n} of {n_arms} paths)"
+    ax.set_title(title)
+    ax.legend(fontsize=7)
+    ax.set_ylim(0, ymax * 1.25 if ymax > 0 else 1.0)
+    ax.grid(True, axis="y", alpha=0.3)
+    policy_path = output_dir / "final_policies.png"
+    fig.savefig(policy_path, dpi=150)
+    plt.close(fig)
+    return policy_path

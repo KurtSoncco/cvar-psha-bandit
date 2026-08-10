@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cvar-psha"
+version = "0.1.0"
+description = "Learn optimal Importance Sampling for CVaR in a PSHA logic tree via bandits"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "matplotlib>=3.8",
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+cvar-psha = "cvar_psha.run_experiment:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

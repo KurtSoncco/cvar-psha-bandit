@@ -1,0 +1,72 @@
+seed: 42
+
+spatial:
+  n_sites: 10
+  fault_start: [0.0, 0.0]
+  fault_end: [100.0, 0.0]
+  n_rupture_bins: 20
+  m_min: 5.0
+  m_max: 8.0
+  m_step: 0.2
+  gr_b: 1.0
+  gamma_atten: 1.0
+  r0: 5.0
+  m_ref: 6.0
+  geometries:
+    - name: nominal
+      weight: 0.5
+      y_offset: 0.0
+    - name: offset
+      weight: 0.5
+      y_offset: 8.0
+  gmms:
+    - name: optimistic
+      weight: 0.4
+      mu_a: -3.2
+      mu_b: 0.9
+      sigma: 0.55
+    - name: average
+      weight: 0.4
+      mu_a: -2.6
+      mu_b: 0.9
+      sigma: 0.55
+    - name: pessimistic
+      weight: 0.2
+      mu_a: -2.0
+      mu_b: 0.9
+      sigma: 0.55
+
+percentile: 0.95
+ground_truth_n: 500000
+
+budget: 30000
+eval_every: 500
+n_replications: 5
+
+reinforce:
+  learning_rate: 0.03
+  baseline_alpha: 0.1
+
+hierarchical:
+  learning_rate: 0.05
+  baseline_alpha: 0.1
+  manager_lr_scale: 0.6
+  worker_lr_scale: 1.0
+  temp_start: 1.25
+  temp_end: 0.95
+  entropy_start: 0.05
+  entropy_end: 0.01
+  gae_lambda: 0.9
+  soft_mix_start: 0.0
+  soft_mix_end: 0.0
+  prior_mix: 0.0
+
+cvar_cpo:
+  learning_rate: 0.03
+  dual_lr: 0.05
+  kl_coef: 0.15
+  prior_kl_coef: 0.25
+  cvar_tol: 0.15
+  target_ema: 0.05
+
+output_dir: results/spatial

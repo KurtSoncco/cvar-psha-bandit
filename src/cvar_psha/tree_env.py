@@ -162,6 +162,20 @@ class TreeLogicEnv:
             return nxt, 0.0, True, info
         return nxt, 0.0, False, info
 
+    def sample_path_from_flat_q(
+        self, q: np.ndarray
+    ) -> tuple[tuple[int, ...], float, float]:
+        """Sample a full path directly from a path-level categorical q,
+        for oracle IS baselines (e.g. q_star / q_disagg). Mirrors
+        SpatialPortfolioEnv.sample_path_from_flat_q."""
+        q = np.asarray(q, dtype=float)
+        q = q / q.sum()
+        idx = int(self.rng.choice(self.n_paths, p=q))
+        path = self.paths[idx]
+        y = self.sample_y(path)
+        iw = self.path_priors[idx] / max(q[idx], 1e-12)
+        return path, y, iw
+
     def rollout_with_policy(
         self,
         action_fn,

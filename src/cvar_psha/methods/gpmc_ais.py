@@ -46,7 +46,12 @@ def run_gpmc_ais(
     defensive_eps: float = 0.1,
     target: str = "disagg",
     eval_every: int = 200,
+    log_samples: bool = False,
 ) -> MethodResult:
+    """`log_samples=True` additionally stores every (theta, y, iw) drawn
+    across the whole run in extras -- needed to reconstruct hazard curves
+    (mean and fractile, at any threshold) post-hoc from a single run
+    instead of re-running per threshold; see hazard_curve.py."""
     tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
     prior = env.prior
     mean = prior.mean.copy()
@@ -54,6 +59,9 @@ def run_gpmc_ais(
     cov_floor = cov_floor_scale * prior.cov  # never let cov collapse below this
     proposal = GaussianProposal(mean, cov)
     mean_history = [mean.copy()]
+    log_thetas: list = []
+    log_ys: list = []
+    log_iws: list = []
 
     n_done = 0
     while n_done < budget:
@@ -79,6 +87,10 @@ def run_gpmc_ais(
         iw = prior_pdf / np.clip(q_mix_pdf, 1e-300, None)
         for y_i, w_i in zip(ys, iw):
             tracker.update(float(y_i), float(w_i))
+        if log_samples:
+            log_thetas.append(thetas.copy())
+            log_ys.append(ys.copy())
+            log_iws.append(iw.copy())
         n_done += m
 
         # PMC refit target (closed-form, self-normalized importance weights).
@@ -101,13 +113,18 @@ def run_gpmc_ais(
         mean_history.append(mean.copy())
 
     name = "G-PMC AIS (CVaR)" if target == "cvar" else "G-PMC AIS"
+    extras = {
+        "final_mean": mean.copy(),
+        "final_cov": cov.copy(),
+        "mean_history": np.asarray(mean_history),
+    }
+    if log_samples:
+        extras["thetas"] = np.concatenate(log_thetas, axis=0)
+        extras["ys"] = np.concatenate(log_ys, axis=0)
+        extras["iws"] = np.concatenate(log_iws, axis=0)
     return MethodResult(
         name=name,
         metrics=tracker.finalize(),
         final_q=None,
-        extras={
-            "final_mean": mean.copy(),
-            "final_cov": cov.copy(),
-            "mean_history": np.asarray(mean_history),
-        },
+        extras=extras,
     )

@@ -272,6 +272,7 @@ def run_jepa_cvar_v2(
     tilt_cap: float | None = 1.0,
     eval_every: int = 200,
     seed: int = 0,
+    log_samples: bool = False,
 ) -> MethodResult:
     """Stage A (+B +C) JEPA-CVaR: CE/PMC empirical-weight refit, optional
     joint (theta,y) tilt, optional two-level hierarchical JEPA. Never given
@@ -329,6 +330,9 @@ def run_jepa_cvar_v2(
     n_done = 0
     batch_r_history: list = []  # for coarse JEPA's batch-aggregated target
     k_hat_history: list = []  # PSIS reliability diagnostic per batch
+    log_thetas: list = []
+    log_ys: list = []
+    log_iws: list = []
 
     while n_done < budget:
         m = min(batch_size, budget - n_done)
@@ -408,6 +412,10 @@ def run_jepa_cvar_v2(
 
         for y_i, w_i in zip(y, iw):
             tracker.update(float(y_i), float(w_i))
+        if log_samples:
+            log_thetas.append(thetas.copy())
+            log_ys.append(y.copy())
+            log_iws.append(iw.copy())
         n_done += m
 
         r = np.where(y > v95, iw * y, 0.0)  # == tail_reward(y_i, iw_i, v95), vectorized, from smoothed iw
@@ -446,23 +454,28 @@ def run_jepa_cvar_v2(
                 coarse_buf_ctx.clear()
                 coarse_buf_feat.clear()
 
+    extras = {
+        "final_mean": mean_theta.copy(),
+        "final_cov": cov_theta.copy(),
+        "Wy": Wy.copy(),
+        "by": by,
+        "jepa_fine": jepa_fine,
+        "jepa_coarse": jepa_coarse,
+        "enable_joint_tilt": enable_joint_tilt,
+        "enable_hierarchical": enable_hierarchical,
+        "use_psis": use_psis,
+        "mixture_window": mixture_window,
+        "k_hat_history": np.asarray(k_hat_history, dtype=float),
+        "k_hat_mean": float(np.nanmean(k_hat_history)) if k_hat_history else float("nan"),
+        "metrics_raw_unsmoothed": tracker_raw.finalize(),
+    }
+    if log_samples:
+        extras["thetas"] = np.concatenate(log_thetas, axis=0)
+        extras["ys"] = np.concatenate(log_ys, axis=0)
+        extras["iws"] = np.concatenate(log_iws, axis=0)
     return MethodResult(
         name="Hierarchical JEPA-CVaR v2",
         metrics=tracker.finalize(),
         final_q=None,
-        extras={
-            "final_mean": mean_theta.copy(),
-            "final_cov": cov_theta.copy(),
-            "Wy": Wy.copy(),
-            "by": by,
-            "jepa_fine": jepa_fine,
-            "jepa_coarse": jepa_coarse,
-            "enable_joint_tilt": enable_joint_tilt,
-            "enable_hierarchical": enable_hierarchical,
-            "use_psis": use_psis,
-            "mixture_window": mixture_window,
-            "k_hat_history": np.asarray(k_hat_history, dtype=float),
-            "k_hat_mean": float(np.nanmean(k_hat_history)) if k_hat_history else float("nan"),
-            "metrics_raw_unsmoothed": tracker_raw.finalize(),
-        },
+        extras=extras,
     )

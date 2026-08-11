@@ -124,6 +124,8 @@ This is a genuine trade-off, not a clean win, and a single-seed test I ran first
 
 Where this actually leaves things: v2 has a far more stable ESS than v1 (std of 162 vs 739, despite a similar mean), the best CVaR RMSE of any method including the one with closed-form access, and — for the first time in this investigation — a `k_hat` diagnostic that says the estimator should be trusted. It is not uniformly better than G-PMC AIS: KS is worse, and G-PMC AIS's own ESS is still higher. That's the honest state of it.
 
+**Worked example — mean & fractile hazard curves, not just a single VaR/CVaR point:** `scripts/hazard_curve_example.py` runs G-PMC AIS ("continuous IS") and Hierarchical JEPA-CVaR v2 ("the best that we have") once each, tuned toward only the rarest intensity level, then reconstructs the *entire* hazard curve — mean and 5/50/95 epistemic fractiles — from the same logged samples, compared against the exact quadrature curve. This is the actual deliverable of the paper-2 style approach (mean + fractile hazard from one adaptive-IS run), demonstrated end-to-end. Full writeup, plots, and numbers: [`results/hazard_curve_example/SUMMARY.md`](results/hazard_curve_example/SUMMARY.md).
+
 ### 2D multi-site portfolio hazard MDP
 
 Fault-line ruptures, \(K=10\) sites, Gutenberg–Richter magnitude bins, epistemic geometry + GMM (Manager) and mag + rupture location (Worker).

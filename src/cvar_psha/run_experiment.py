@@ -15,7 +15,7 @@ from cvar_psha.env import Arm, LogicTreeEnv
 from cvar_psha.ground_truth import compute_ground_truth
 from cvar_psha.methods.cem import run_cem
 from cvar_psha.methods.gpmc_ais import run_gpmc_ais
-from cvar_psha.methods.jepa_cvar import run_jepa_cvar
+from cvar_psha.methods.jepa_cvar import run_jepa_cvar, run_jepa_cvar_v2
 from cvar_psha.methods.cvar_cpo import run_cvar_cpo
 from cvar_psha.methods.exp3 import run_exp3
 from cvar_psha.methods.hierarchical import run_hierarchical
@@ -678,6 +678,7 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
         "Disagg-IS oracle": [],
         "G-PMC AIS": [],
         "Hierarchical JEPA-CVaR": [],
+        "Hierarchical JEPA-CVaR v2": [],
     }
 
     for rep in range(n_reps):
@@ -718,6 +719,24 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
                 std_start=float(jepa_cfg.get("std_start", 0.9)),
                 std_end=float(jepa_cfg.get("std_end", 0.35)),
                 jepa_train_every=int(jepa_cfg.get("jepa_train_every", 16)),
+                eval_every=eval_every,
+                seed=rep,
+            )
+        )
+
+        env = continuous_env_from_config(cfg, np.random.default_rng(rep_seed + 3))
+        method_runs["Hierarchical JEPA-CVaR v2"].append(
+            run_jepa_cvar_v2(
+                env,
+                gt.v95,
+                budget,
+                batch_size=int(jepa_cfg.get("v2_batch_size", 300)),
+                smoothing=float(jepa_cfg.get("v2_smoothing", 0.5)),
+                cov_inflation=float(jepa_cfg.get("v2_cov_inflation", 1.15)),
+                defensive_eps=float(jepa_cfg.get("v2_defensive_eps", 0.1)),
+                jepa_train_every=int(jepa_cfg.get("jepa_train_every", 16)),
+                enable_joint_tilt=bool(jepa_cfg.get("v2_joint_tilt", True)),
+                enable_hierarchical=bool(jepa_cfg.get("v2_hierarchical", True)),
                 eval_every=eval_every,
                 seed=rep,
             )

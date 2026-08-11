@@ -46,11 +46,12 @@ def plot_analysis_comparisons(
         "CVaR-CPO": "#1a7a4c",
         "G-PMC AIS": "#8e44ad",
         "G-PMC AIS (CVaR)": "#8e44ad",
-        "Hierarchical JEPA-CVaR": "#c0392b",
+        "Hierarchical JEPA-CVaR": "#e08283",
+        "Hierarchical JEPA-CVaR v2": "#c0392b",
     }
 
     # Emphasize Hierarchical vs baselines.
-    highlight = {"Hierarchical", "q* oracle", "Naive MC", "Hierarchical JEPA-CVaR", "G-PMC AIS"}
+    highlight = {"Hierarchical", "q* oracle", "Naive MC", "Hierarchical JEPA-CVaR v2", "G-PMC AIS"}
 
     # --- Plot 1: CVaR convergence ---
     fig1, ax1 = plt.subplots(figsize=(8.5, 5.0), constrained_layout=True)
@@ -286,13 +287,15 @@ def plot_continuous_theta_comparison(
         "Naive MC": "#7a7a7a",
         "Disagg-IS oracle": "#1f1f1f",
         "G-PMC AIS": "#8e44ad",
-        "Hierarchical JEPA-CVaR": "#c0392b",
+        "Hierarchical JEPA-CVaR": "#e08283",
+        "Hierarchical JEPA-CVaR v2": "#c0392b",
     }
     markers = {
         "Naive MC": "o",
         "Disagg-IS oracle": "*",
         "G-PMC AIS": "s",
-        "Hierarchical JEPA-CVaR": "D",
+        "Hierarchical JEPA-CVaR": "^",
+        "Hierarchical JEPA-CVaR v2": "D",
     }
     for name, mean in method_means.items():
         ax.scatter(

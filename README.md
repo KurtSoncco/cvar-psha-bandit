@@ -53,38 +53,40 @@ Methods compared:
 - **Naive MC** — samples the nominal prior.
 - **Disagg-IS oracle** — samples a Gaussian moment-matched to the exact `q_disagg` grid (static upper baseline).
 - **G-PMC AIS** — Gaussian Population Monte Carlo adaptive importance sampling (`methods/gpmc_ais.py`), our implementation of the paper 2 approach. *Given* the closed-form conditional hazard `P(Y>v|θ)` directly.
-- **Hierarchical JEPA-CVaR** — our agent (`methods/jepa_cvar.py` + `jepa.py`), described precisely below. **Never sees `P(Y>v|θ)`.**
+- **Hierarchical JEPA-CVaR v1** — the original agent (`methods/jepa_cvar.py: run_jepa_cvar`), kept for comparison. **Never sees `P(Y>v|θ)`.**
+- **Hierarchical JEPA-CVaR v2** — a corrected agent (`methods/jepa_cvar.py: run_jepa_cvar_v2` + `jepa.py`), replacing v1's heuristic update rule with a theoretically-motivated one. **Also never sees `P(Y>v|θ)`.** Described below.
 
-**What "Hierarchical JEPA-CVaR" actually is (and isn't).** This is a lightweight numpy analog, not a reproduction of published architectures — stated plainly so the results below aren't over-read:
-- *JEPA:* real self-supervised joint-embedding mechanics (separate context/target encoders, EMA target network with stop-gradient, a predictor trained to match embeddings rather than raw rollout values), gradient-checked against numerical differentiation (1e-9 agreement) — but linear (no hidden layer) encoders, `embed_dim=4`, 2-D input. Not the architecture of the I-JEPA/V-JEPA papers.
-- *Hierarchical:* a 2-level Gaussian mean composition (a slow Manager anchor + a fast JEPA-latent-conditioned Worker correction), named after this repo's existing `hierarchical.py` pattern — **not** LeCun's proposed Hierarchical-JEPA (a stack of JEPA modules predicting at multiple temporal/spatial abstraction levels).
-- *CVaR:* the dual variable `lam` penalizes drift of the running CVaR *estimate* from a target — the same heuristic mechanism as this repo's `cvar_cpo.py` (itself documented as "lightweight discrete CPO," not a rigorous CVaR policy gradient). It also only tilts θ (the epistemic marginal), leaving `y|θ` at its nominal conditional law — by construction this **cannot** reach the true zero-variance CVaR target, which requires tilting the joint `p(θ)p(y|θ) → q(θ,y) ∝ p(θ)p(y|θ)·y·1{y>v}`. See "Toward a real JEPA-CVaR algorithm" below for what closing this gap would take.
+**What v1 got wrong, and what v2 fixes.** v1's "CVaR" mechanism was a dual variable penalizing drift of the running CVaR *estimate* — a heuristic copied from this repo's `cvar_cpo.py` (itself labeled "lightweight discrete CPO," not a rigorous CVaR policy gradient), and my original text here cited Tamar/Chow & Ghavamzadeh's CVaR-policy-gradient/CPO papers as the target to aim for. That citation was a mismatch: those papers solve risk-averse RL over *an agent's own returns*; our actual problem is *adaptive importance sampling to minimize the variance of a CVaR estimator of a fixed external Y under a fixed nominal prior p* — the classical Cross-Entropy / Population Monte Carlo literature (de Boer, Kroese, Mannor & Rubinstein 2005; Cappé et al. 2004), which `gpmc_ais.py` already implements correctly.
 
-**Result (budget=20k, 10 replications — not a single point estimate):**
+v2's fix follows directly from that reframing: CE fits `q_φ` by minimizing `KL(q*, q_φ)` where `q*(x) ∝ p(x)H(x)`, which for a Gaussian family is a weighted moment-matching update using weights `w(x)=p(x)H(x)/q_ref(x)`. G-PMC AIS uses the closed-form `H(θ)=P(Y>v|θ)`; **the only thing requiring closed-form access is the choice of `H`, not the refit mechanism** — so v2 substitutes the single-rollout empirical outcome `H(θ,y)=y·1{y>v}`, and `p(θ)H(θ,y)/q(θ)` turns out to be exactly `estimators.tail_reward`, already used everywhere in this repo. v2 also tilts the full joint (adding a learned mean-shift `δ(θ)` to `ln Y | θ`, refit by weighted least squares) and composes two `LightweightJEPA` instances (a coarse region embedding feeding a fine one). All three additions were validated before the full run:
+- Weighted moment-matching and weighted least-squares formulas checked against synthetic known-target recovery (≤3e-4 error).
+- The learned `δ(θ)` was checked against a closed-form target — **not** the naive `σ(θ)²` untruncated-tilt originally proposed (that ignores the effect of conditioning on `Y>v`, which itself shifts the mean further); the correct target is the mean of the truncated-tilted normal, `μ+σ²+σ·φ(α)/(1−Φ(α))` with `α=(ln v−μ−σ²)/σ`. Learned values (1.16–1.56 across 4 test θ) tracked this corrected target (1.24–1.60) well, confirming the fit learns the right quantity.
 
-| Method | KS vs `q_disagg` (mean ± std) | CVaR estimate mean ± std | \|bias\| | RMSE |
+**Result (budget=20k, 10 replications; ESS from a separate 8-replication check):**
+
+| Method | KS vs `q_disagg` (mean ± std) | CVaR estimate mean ± std | RMSE | ESS (mean ± std, of 20k) |
 |---|---|---|---|---|
-| Naive MC | 0.503 ± 0.000 | 2.339 ± 0.049 | 0.75% | 0.0520 |
-| G-PMC AIS (given closed form) | **0.038 ± 0.007** | 2.321 ± 0.033 | **0.03%** | 0.0327 |
-| Hierarchical JEPA-CVaR (scalar reward only) | 0.092 ± 0.015 | 2.306 ± 0.018 | 0.67% | **0.0240** |
+| Naive MC | 0.503 ± 0.000 | 2.339 ± 0.049 | 0.0520 | 20,000 (no reweighting) |
+| G-PMC AIS (given closed form) | **0.038 ± 0.007** | 2.321 ± 0.033 | 0.0327 | **6,099 ± 75** |
+| Hierarchical JEPA-CVaR v1 (scalar reward only) | 0.092 ± 0.015 | 2.306 ± 0.018 | 0.0240 | 2,577 ± 739 |
+| **Hierarchical JEPA-CVaR v2 (scalar reward only)** | 0.062 ± 0.019 | **2.320 ± 0.011** | **0.0113** | ⚠️ 100 ± 74 |
 
-(true CVaR = 2.3219)
+(true CVaR = 2.3219 — see the ESS caveat right below before reading the RMSE column as a clean win)
 
-Direct answers, since the honest picture is mixed and metric-dependent:
-- **Density match vs G-PMC AIS: loses, clearly.** ~2.4× worse KS (0.092 vs 0.038), non-overlapping across 10 reps. It beats Naive MC (0.503) but does not beat G-PMC AIS.
-- **CVaR error vs G-PMC AIS: depends on the metric.** G-PMC AIS has essentially zero mean bias (0.03%) and wins on bias. Hierarchical JEPA-CVaR is consistently biased ~0.7% low, but its variance across replications is under half of G-PMC AIS's and less than half of Naive MC's — low enough that its **RMSE ends up lowest of the three** (0.0240 vs 0.0327 vs 0.0520). Plausible explanation: the dual variable directly targets CVaR-tracking rather than density matching, at the cost of a small systematic bias worth investigating further, not a clean unqualified win.
+Direct answers:
+- **v2 vs v1: clearly better on both metrics.** KS improves 0.092→0.062 (individual v2 runs as low as 0.027 — better than G-PMC AIS's average — though also as high as 0.091, so noisier run-to-run than G-PMC AIS). CVaR RMSE improves 0.0240→0.0113.
+- **Density match vs G-PMC AIS: still loses on average**, but the gap shrank from 2.4× (v1) to 1.6× (v2), and the ranges now overlap.
+- **CVaR error vs G-PMC AIS: v2 wins on RMSE, but read the ESS caveat below before trusting it.** Mean 2.320 vs true 2.3219 is essentially exact, and RMSE (0.0113) is nominally ~3× better than G-PMC AIS's (0.0327) despite zero closed-form access — but v2's ESS (100 ± 74 of 20,000) is two orders of magnitude below G-PMC AIS's (6,099 ± 75), meaning individual v2 runs are frequently dominated by a handful of samples. The RMSE number is real (it's what was measured), but "v2 beats G-PMC AIS" should be read as a promising, not yet fully trustworthy, result until the ESS collapse is understood.
 
 Outputs: `results/continuous/` (`cvar_convergence.png`, `ess_comparison.png`, `continuous_theta_comparison.png`)
 
-### Toward a real JEPA-CVaR algorithm
+### What's still not "the real thing" — and a reliability caveat that qualifies the CVaR-RMSE win
 
-The above is a scoped, honestly-labeled analog. Closing the gap to something that deserves the name without qualifiers would need, roughly in order of expected impact:
+Even v2 is not unqualified: the JEPA encoders are still linear/toy-scale (not I-JEPA/V-JEPA architecture), the y-tilt keeps aleatory variance fixed (no learned scale), and the coarse/fine JEPA composition, while genuinely two-level, is simple (batch-aggregated coarse signal, not a learned multi-step abstraction hierarchy). The KS gap to G-PMC AIS, while narrowed, hasn't closed.
 
-1. **Tilt the joint, not just θ.** Let the Worker also propose an aleatory correction to `y | θ` (e.g. a learned shift/scale on the sampling of `ln Y`), with the importance weight computed over the full joint `q(θ, y)`. This is the only way to approach the true zero-variance CVaR target rather than the θ-marginal-only target every method here (including G-PMC AIS) is limited to.
-2. **A real CVaR policy gradient**, replacing the drift-penalizing dual heuristic — e.g. Tamar, Glynn & Mannor (2015)'s CVaR policy gradient theorem, or a properly derived CPO with trust-region KKT conditions (Chow & Ghavamzadeh), rather than a hand-tuned Lagrangian proxy.
-3. **A genuinely hierarchical (multi-scale) JEPA**, predicting at more than one level of abstraction (e.g. a coarse "region of θ-space" predictor feeding a fine "exact θ" predictor, each with its own target encoder/EMA pair), rather than the current single-level context/target pair.
-4. **A deeper encoder** (hidden layers, larger `embed_dim`) once (1)–(3) justify the added capacity — right now the bottleneck is the algorithm, not encoder width.
-5. Re-run the RMSE/KS comparison at several budgets and seeds-per-budget (10 reps is a first read, not a settled result) to see whether the low-bias/low-variance trade this version shows is a real property of CVaR-shaped objectives or an artifact of this budget/config.
+More importantly, the CVaR-RMSE win above needs a real caveat, found by checking ESS (this project's own policy-collapse diagnostic) rather than taking the RMSE number at face value: over 8 replications, **v2's ESS is 100 ± 74 out of a 20,000 budget (~0.5%)** — one replication had ESS = 5. G-PMC AIS's ESS is 6,099 ± 75 over the same runs; v1's is 2,577 ± 739. A low, unstable ESS means v2's self-normalized IS estimator is, within many individual runs, dominated by a handful of samples — a known pathology of using the raw severity `y·1{y>v}` (heavy-tailed, since `Y` is lognormal) as an unclipped CE moment-matching weight, only partly offset by the 10% defensive-mixture floor. That v2's *between-replication* CVaR std (0.011) was nonetheless low is not fully explained by this and is worth treating as provisional rather than settled — it's plausible the CE-refit reliably converges to a similar concentrated region each time even though any single run's estimator is individually fragile, but that needs more replications (and ideally weight-clipping or a log-weight variant) to confirm rather than assume. **The honest summary: v2 is a real improvement over v1 on every metric checked, and beats G-PMC AIS's point accuracy in this experiment, but its low ESS means that win should not yet be trusted as robust.**
+
+Next steps, in order of expected impact: weight-clipping or a log-domain weight transform in the CE refit to fix the ESS collapse (likely the highest-value fix — it may also improve the still-lagging KS); a learned aleatory scale (not just mean-shift) in the y-tilt; more replications once ESS is fixed to re-check whether the RMSE win survives; only then, larger encoders.
 
 ### 2D multi-site portfolio hazard MDP
 

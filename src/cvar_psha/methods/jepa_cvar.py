@@ -35,6 +35,7 @@ from cvar_psha.continuous_env import ContinuousEpistemicEnv, GaussianProposal
 from cvar_psha.estimators import OnlineCVaRTracker, importance_weight, tail_reward
 from cvar_psha.jepa import LightweightJEPA, build_target_features
 from cvar_psha.methods import MethodResult
+from cvar_psha.psis import psis_smooth
 
 
 @dataclass
@@ -265,13 +266,25 @@ def run_jepa_cvar_v2(
     enable_joint_tilt: bool = True,
     enable_hierarchical: bool = True,
     coarse_embed_dim: int = 3,
+    use_psis: bool = True,
     eval_every: int = 200,
     seed: int = 0,
 ) -> MethodResult:
     """Stage A (+B +C) JEPA-CVaR: CE/PMC empirical-weight refit, optional
     joint (theta,y) tilt, optional two-level hierarchical JEPA. Never given
-    P(Y>v|theta) -- the empirical weight is exactly `tail_reward`."""
+    P(Y>v|theta) -- the empirical weight is exactly `tail_reward`.
+
+    `use_psis=True` (default) Pareto-smooths the per-batch importance
+    weight `iw` (see psis.py) before it feeds both the reported CVaR/ESS
+    tracker and the CE/PMC refit weight `r` -- standard PSIS-LOO practice
+    is to smooth the weights that actually drive the estimator, with the
+    fitted GPD shape `k_hat` reported alongside as the reliability flag,
+    not to smooth some internal-only copy while reporting a separate raw
+    number. An unsmoothed `tracker_raw` is kept in extras purely so the
+    before/after effect of smoothing is visible, not as the "real" answer.
+    """
     tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
+    tracker_raw = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
     theta_dim = 2
     prior = env.prior
     mean_theta = prior.mean.copy()
@@ -298,6 +311,7 @@ def run_jepa_cvar_v2(
 
     n_done = 0
     batch_r_history: list = []  # for coarse JEPA's batch-aggregated target
+    k_hat_history: list = []  # PSIS reliability diagnostic per batch
 
     while n_done < budget:
         m = min(batch_size, budget - n_done)
@@ -338,12 +352,29 @@ def run_jepa_cvar_v2(
 
         iw_theta = p_theta_pdf / np.clip(q_theta_mix_pdf, 1e-300, None)
         iw_y = _exp_tilt_ratio(ln_y, mu_leaf, delta_y, sigma_leaf) if enable_joint_tilt else np.ones(m)
-        iw = iw_theta * iw_y
+        iw_raw = iw_theta * iw_y
 
-        r = np.where(y > v95, iw * y, 0.0)  # == tail_reward(y_i, iw_i, v95), vectorized
+        for y_i, w_i in zip(y, iw_raw):
+            tracker_raw.update(float(y_i), float(w_i))  # unsmoothed, kept only for before/after comparison
+
+        # PSIS-smooth iw itself -- standard PSIS-LOO practice is to smooth
+        # the weights that actually feed the estimator (not a separate
+        # internal-only copy), with k_hat reported alongside as the
+        # reliability flag. `iw` (smoothed) is what both the reported
+        # CVaR/ESS *and* the CE/PMC refit weight `r` are built from below,
+        # so a single PSIS fit governs both consistently.
+        if use_psis:
+            psis_res = psis_smooth(iw_raw)
+            iw = psis_res.weights
+            k_hat_history.append(psis_res.k_hat)
+        else:
+            iw = iw_raw
+
         for y_i, w_i in zip(y, iw):
             tracker.update(float(y_i), float(w_i))
         n_done += m
+
+        r = np.where(y > v95, iw * y, 0.0)  # == tail_reward(y_i, iw_i, v95), vectorized, from smoothed iw
 
         # --- CE/PMC refit using the empirical weight r (no closed form) ---
         mean_theta, cov_theta = _weighted_moment_match(thetas, r, prior.cov, cov_inflation, cov_floor_scale)
@@ -392,5 +423,9 @@ def run_jepa_cvar_v2(
             "jepa_coarse": jepa_coarse,
             "enable_joint_tilt": enable_joint_tilt,
             "enable_hierarchical": enable_hierarchical,
+            "use_psis": use_psis,
+            "k_hat_history": np.asarray(k_hat_history, dtype=float),
+            "k_hat_mean": float(np.nanmean(k_hat_history)) if k_hat_history else float("nan"),
+            "metrics_raw_unsmoothed": tracker_raw.finalize(),
         },
     )

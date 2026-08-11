@@ -33,3 +33,11 @@ jepa_cvar:
   std_start: 0.9
   std_end: 0.35
   jepa_train_every: 16
+  # v2 (run_jepa_cvar_v2): CE/PMC empirical-weight refit + joint tilt + hierarchical JEPA
+  v2_batch_size: 300
+  v2_smoothing: 0.5
+  v2_cov_inflation: 1.15
+  v2_defensive_eps: 0.1
+  v2_joint_tilt: true
+  v2_hierarchical: true
+  v2_use_psis: true  # Pareto-smooth iw before it drives the refit/reported estimator; see psis.py

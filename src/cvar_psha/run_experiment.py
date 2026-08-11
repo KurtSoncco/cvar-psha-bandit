@@ -737,6 +737,7 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
                 jepa_train_every=int(jepa_cfg.get("jepa_train_every", 16)),
                 enable_joint_tilt=bool(jepa_cfg.get("v2_joint_tilt", True)),
                 enable_hierarchical=bool(jepa_cfg.get("v2_hierarchical", True)),
+                use_psis=bool(jepa_cfg.get("v2_use_psis", True)),
                 eval_every=eval_every,
                 seed=rep,
             )

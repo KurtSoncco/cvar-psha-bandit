@@ -738,6 +738,8 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
                 enable_joint_tilt=bool(jepa_cfg.get("v2_joint_tilt", True)),
                 enable_hierarchical=bool(jepa_cfg.get("v2_hierarchical", True)),
                 use_psis=bool(jepa_cfg.get("v2_use_psis", True)),
+                mixture_window=int(jepa_cfg.get("v2_mixture_window", 6)),
+                tilt_cap=jepa_cfg.get("v2_tilt_cap", 1.0),
                 eval_every=eval_every,
                 seed=rep,
             )

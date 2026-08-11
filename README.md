@@ -62,7 +62,7 @@ v2's fix follows directly from that reframing: CE fits `q_φ` by minimizing `KL(
 - Weighted moment-matching and weighted least-squares formulas checked against synthetic known-target recovery (≤3e-4 error).
 - The learned `δ(θ)` was checked against a closed-form target — **not** the naive `σ(θ)²` untruncated-tilt originally proposed (that ignores the effect of conditioning on `Y>v`, which itself shifts the mean further); the correct target is the mean of the truncated-tilted normal, `μ+σ²+σ·φ(α)/(1−Φ(α))` with `α=(ln v−μ−σ²)/σ`. Learned values (1.16–1.56 across 4 test θ) tracked this corrected target (1.24–1.60) well, confirming the fit learns the right quantity.
 
-**Result (budget=20k, 10 replications; ESS from a separate 8-replication check):**
+**Result, initial v2 (budget=20k, 10 replications; ESS from a separate 8-replication check) — before the ESS investigation below; superseded by the "current defaults" table at the end of this section:**
 
 | Method | KS vs `q_disagg` (mean ± std) | CVaR estimate mean ± std | RMSE | ESS (mean ± std, of 20k) |
 |---|---|---|---|---|
@@ -97,7 +97,32 @@ More importantly, the CVaR-RMSE win above needs a real caveat, found by checking
 
 PSIS gives a real, measurable improvement — ESS roughly **3.4× better on average**, with no meaningful change (and no bias) in CVaR accuracy. But `k_hat` sits at ~0.9–1.0 in *every single replication*, consistently above the paper's own 0.7 reliability threshold. Read plainly: **PSIS confirms the original diagnosis was correct** (an independent, more principled diagnostic agrees the weight tail is problematic) **and provides partial relief, but is honestly telling us it cannot fully fix this** — the tail is heavier than even GPD-smoothing can safely characterize at this sample size. This is exactly the outcome PSIS is designed to surface, not a failure of the implementation.
 
-**What would go further:** the leading state-of-the-art candidate is **Deterministic Mixture PMC / AMIS** (Cornuet, Marin, Mira & Robert 2012; Elvira, Martino, Luengo & Bugallo 2019) — evaluate each sample's weight against the mixture of *every* proposal used so far (the balance heuristic), not just the current batch's proposal + a defensive prior floor. This addresses the likely root cause more directly (an increasingly-narrow adapted proposal creates extreme `p(θ)/q(θ)` ratios for any off-mean draw) rather than post-hoc smoothing a symptom of it, at the cost of a real rewrite of the refit loop's weight denominator — not yet implemented. Increasing the defensive-mixture fraction further, and/or a k_hat-triggered adaptive step size (shrink the refit's `smoothing` when a batch's k_hat is high), are cheaper things to try first.
+**Tried: windowed Deterministic-Mixture PMC / AMIS** (Cornuet, Marin, Mira & Robert 2012; Elvira, Martino, Luengo & Bugallo 2019) — evaluate each sample against the mixture of the last `mixture_window` proposals actually used (a bounded-memory version of the full "every proposal ever" balance heuristic), targeting the hypothesis that an increasingly-narrow adapted proposal creates extreme `p(θ)/q(θ)` ratios for off-mean draws. **Result: essentially no effect.** Sweeping `mixture_window` ∈ {1, 3, 6, 12} moved ESS and KS by amounts consistent with noise, not a trend — and checking directly, the proposal's covariance wasn't collapsing much (determinant ratio ≈0.57 vs the prior, not orders of magnitude). Wrong root cause: the θ-side proposal narrowing this technique targets wasn't actually the dominant problem here.
+
+**Found the real root cause, and a fix that worked:** disabling the joint (θ,y) tilt entirely (`enable_joint_tilt=False`) took raw ESS from 24 to **4,952** — a ~200× jump — at the cost of KS degrading from 0.026 to 0.32. That isolates it: **the y-tilt itself (Gap 2 from the original review) is the dominant source of weight degeneracy**, not the θ-refit. The mechanism: `iw_y`'s Girsanov ratio grows like `exp(δ²/2σ²)`, so whenever the learned tilt `δ(θ)` is large relative to `σ(θ)` — which is exactly the well-fitting, informative regime confirmed by the closed-form cross-check earlier — the likelihood ratio itself becomes heavy-tailed. Rather than disabling the tilt (throwing away real signal), we cap it: `δ(θ) ← clip(δ(θ), ±tilt_cap·σ(θ))`.
+
+**Result (budget=20k, 10 replications, `tilt_cap=1.0`, combined with PSIS + windowed mixture):**
+
+| | ESS (mean ± std) | `k_hat` (mean) | CVaR RMSE | KS vs `q_disagg` |
+|---|---|---|---|---|
+| v2, PSIS only | 300.8 ± 51.6 | 0.96 (unreliable) | 0.0076 | 0.068 ± 0.023 |
+| **v2, + tilt_cap=1.0** | **2,480 ± 162** | **0.49 (reliable)** | 0.0114 | 0.120 ± 0.064 |
+| G-PMC AIS (reference) | 6,089 ± 74 | — | 0.0327 | 0.038 ± 0.007 |
+
+This is a genuine trade-off, not a clean win, and a single-seed test I ran first (which looked like a win on all three metrics at once) didn't survive averaging over 10 replications — worth flagging since it's exactly the kind of result that's tempting to report from one lucky run. Capping the tilt is the first change in this whole investigation to push `k_hat` **below the 0.7 reliability threshold on average** — i.e., the first version where the PSIS diagnostic itself says "this is now trustworthy" — at a real cost to both KS and CVaR RMSE (though CVaR RMSE, 0.0114, remains ~3× better than G-PMC AIS's). Since the point of the ESS/`k_hat` checks was to determine whether the earlier "v2 beats G-PMC AIS" claim could be trusted, and a diagnostically-reliable estimator matters more than a diagnostically-flagged one with a marginally better point estimate, **`tilt_cap=1.0` (combined with `mixture_window=6` and PSIS) is now the default** for `run_jepa_cvar_v2`, even though it reports a less flattering headline number than the uncapped version did.
+
+**What's left, if pursued further:** a learned (rather than fixed) tilt cap, or a per-sample soft penalty on `δ²/σ²` in the refit objective instead of a hard clip; re-deriving the joint-tilt target to account for the truncation-vs-variance trade-off directly rather than capping after the fact; more replications to check whether the windowed-mixture null result holds at other budgets.
+
+**Current defaults, full picture (`run_jepa_cvar_v2` as shipped — PSIS + `mixture_window=6` + `tilt_cap=1.0`), vs the methods it's compared against:**
+
+| Method | ESS (of 20k) | CVaR RMSE | KS vs `q_disagg` |
+|---|---|---|---|
+| Naive MC | 20,000 | 0.0520 | 0.503 |
+| Hierarchical JEPA-CVaR v1 | 2,577 ± 739 | 0.0240 | 0.092 ± 0.015 |
+| **Hierarchical JEPA-CVaR v2 (current)** | **2,480 ± 162** | **0.0114** | 0.120 ± 0.064 |
+| G-PMC AIS (given closed form) | 6,089 ± 74 | 0.0327 | **0.038 ± 0.007** |
+
+Where this actually leaves things: v2 has a far more stable ESS than v1 (std of 162 vs 739, despite a similar mean), the best CVaR RMSE of any method including the one with closed-form access, and — for the first time in this investigation — a `k_hat` diagnostic that says the estimator should be trusted. It is not uniformly better than G-PMC AIS: KS is worse, and G-PMC AIS's own ESS is still higher. That's the honest state of it.
 
 ### 2D multi-site portfolio hazard MDP
 

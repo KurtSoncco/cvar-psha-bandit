@@ -41,3 +41,5 @@ jepa_cvar:
   v2_joint_tilt: true
   v2_hierarchical: true
   v2_use_psis: true  # Pareto-smooth iw before it drives the refit/reported estimator; see psis.py
+  v2_mixture_window: 6  # deterministic-mixture PMC/AMIS window (bounded history), see jepa_cvar.py
+  v2_tilt_cap: 1.0  # cap |delta(theta)| at this multiple of sigma(theta); the dominant ESS-collapse fix found

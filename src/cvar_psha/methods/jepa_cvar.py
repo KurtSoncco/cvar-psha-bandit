@@ -27,6 +27,7 @@ realized rollout outcomes -- it never receives P(Y>v|theta) either.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -267,6 +268,8 @@ def run_jepa_cvar_v2(
     enable_hierarchical: bool = True,
     coarse_embed_dim: int = 3,
     use_psis: bool = True,
+    mixture_window: int = 6,
+    tilt_cap: float | None = 1.0,
     eval_every: int = 200,
     seed: int = 0,
 ) -> MethodResult:
@@ -282,7 +285,20 @@ def run_jepa_cvar_v2(
     not to smooth some internal-only copy while reporting a separate raw
     number. An unsmoothed `tracker_raw` is kept in extras purely so the
     before/after effect of smoothing is visible, not as the "real" answer.
-    """
+
+    `mixture_window > 0` additionally addresses the likely *root cause* of
+    the ESS collapse PSIS can only partially fix: as the CE refit narrows
+    the proposal over successive batches, any off-mean draw (including the
+    defensive-mixture ones) gets an increasingly extreme p(theta)/q(theta)
+    ratio, because q is evaluated against only the single, ever-narrower
+    current proposal. This is a windowed Deterministic-Mixture PMC / AMIS
+    weighting (Cornuet, Marin, Mira & Robert 2012; Elvira, Martino, Luengo
+    & Bugallo 2019): the importance-weight denominator is the mixture of
+    the last `mixture_window` proposals actually used (not just the
+    latest), bounded rather than unbounded history (full AMIS keeps every
+    proposal ever used) so memory/compute stay flat over the run. Applied
+    consistently to both the refit weight and the reported estimator, as
+    in the reference algorithm (not a separate local-only weight)."""
     tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
     tracker_raw = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
     theta_dim = 2
@@ -290,6 +306,7 @@ def run_jepa_cvar_v2(
     mean_theta = prior.mean.copy()
     cov_theta = prior.cov.copy()
     proposal = GaussianProposal(mean_theta, cov_theta)
+    proposal_window: deque = deque(maxlen=max(1, mixture_window))
 
     fine_input_dim = theta_dim + (coarse_embed_dim if enable_hierarchical else 0)
     jepa_fine = LightweightJEPA(
@@ -334,7 +351,14 @@ def run_jepa_cvar_v2(
         if n_prior > 0:
             thetas[use_prior_mask] = prior.sample(env.rng, n=n_prior)
 
-        q_theta_mix_pdf = (1 - defensive_eps) * proposal.pdf(thetas) + defensive_eps * prior.pdf(thetas)
+        # This batch's own generating proposal joins the window *before* the
+        # denominator is computed, so it is weighted against the mixture
+        # that includes itself (Deterministic Mixture PMC / AMIS).
+        proposal_window.append(proposal)
+        q_window_pdf = np.mean(
+            [comp.pdf(thetas) for comp in proposal_window], axis=0
+        )
+        q_theta_mix_pdf = (1 - defensive_eps) * q_window_pdf + defensive_eps * prior.pdf(thetas)
         p_theta_pdf = prior.pdf(thetas)
 
         mu_leaf, sigma_leaf = env.leaf_params(thetas)
@@ -345,7 +369,19 @@ def run_jepa_cvar_v2(
             fine_input = thetas
         z_fine = jepa_fine.encode_context(fine_input)  # (m, embed_dim)
 
-        delta_y = (z_fine @ Wy + by) if enable_joint_tilt else np.zeros(m)
+        if enable_joint_tilt:
+            delta_y = z_fine @ Wy + by
+            if tilt_cap is not None:
+                # Cap |delta| relative to sigma: the Girsanov ratio's own
+                # variance is exp(delta^2/(2 sigma^2))-ish, so an aggressive
+                # tilt (large delta/sigma) is a direct source of importance-
+                # weight blowup, independent of theta-side concentration --
+                # this is what mixture_window/PSIS alone could not fix
+                # (confirmed empirically: disabling the tilt entirely drops
+                # raw ESS from 24 to ~4950, at a real KS cost).
+                delta_y = np.clip(delta_y, -tilt_cap * sigma_leaf, tilt_cap * sigma_leaf)
+        else:
+            delta_y = np.zeros(m)
 
         ln_y = env.rng.normal(mu_leaf + delta_y, sigma_leaf)
         y = np.exp(ln_y)
@@ -424,6 +460,7 @@ def run_jepa_cvar_v2(
             "enable_joint_tilt": enable_joint_tilt,
             "enable_hierarchical": enable_hierarchical,
             "use_psis": use_psis,
+            "mixture_window": mixture_window,
             "k_hat_history": np.asarray(k_hat_history, dtype=float),
             "k_hat_mean": float(np.nanmean(k_hat_history)) if k_hat_history else float("nan"),
             "metrics_raw_unsmoothed": tracker_raw.finalize(),

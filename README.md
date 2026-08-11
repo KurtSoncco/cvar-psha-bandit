@@ -53,20 +53,38 @@ Methods compared:
 - **Naive MC** — samples the nominal prior.
 - **Disagg-IS oracle** — samples a Gaussian moment-matched to the exact `q_disagg` grid (static upper baseline).
 - **G-PMC AIS** — Gaussian Population Monte Carlo adaptive importance sampling (`methods/gpmc_ais.py`), our implementation of the paper 2 approach. *Given* the closed-form conditional hazard `P(Y>v|θ)` directly.
-- **Hierarchical JEPA-CVaR** — our agent (`methods/jepa_cvar.py`): a numpy joint-embedding predictive architecture (`jepa.py`) trained only on realized rollout outcomes, feeding a hierarchical (Manager anchor + JEPA-latent-conditioned Worker correction) Gaussian sampling policy, trained by a CVaR-CPO-style dual-constrained REINFORCE. **Never sees `P(Y>v|θ)`.**
+- **Hierarchical JEPA-CVaR** — our agent (`methods/jepa_cvar.py` + `jepa.py`), described precisely below. **Never sees `P(Y>v|θ)`.**
 
-**Result (full budget, 20k samples/rep, 5 reps), KS against `q_disagg`:**
+**What "Hierarchical JEPA-CVaR" actually is (and isn't).** This is a lightweight numpy analog, not a reproduction of published architectures — stated plainly so the results below aren't over-read:
+- *JEPA:* real self-supervised joint-embedding mechanics (separate context/target encoders, EMA target network with stop-gradient, a predictor trained to match embeddings rather than raw rollout values), gradient-checked against numerical differentiation (1e-9 agreement) — but linear (no hidden layer) encoders, `embed_dim=4`, 2-D input. Not the architecture of the I-JEPA/V-JEPA papers.
+- *Hierarchical:* a 2-level Gaussian mean composition (a slow Manager anchor + a fast JEPA-latent-conditioned Worker correction), named after this repo's existing `hierarchical.py` pattern — **not** LeCun's proposed Hierarchical-JEPA (a stack of JEPA modules predicting at multiple temporal/spatial abstraction levels).
+- *CVaR:* the dual variable `lam` penalizes drift of the running CVaR *estimate* from a target — the same heuristic mechanism as this repo's `cvar_cpo.py` (itself documented as "lightweight discrete CPO," not a rigorous CVaR policy gradient). It also only tilts θ (the epistemic marginal), leaving `y|θ` at its nominal conditional law — by construction this **cannot** reach the true zero-variance CVaR target, which requires tilting the joint `p(θ)p(y|θ) → q(θ,y) ∝ p(θ)p(y|θ)·y·1{y>v}`. See "Toward a real JEPA-CVaR algorithm" below for what closing this gap would take.
 
-| Method | Given closed-form target? | KS | CVaR estimate (true = 2.3219) |
-|---|---|---|---|
-| Naive MC | no | 0.503 | 2.328 |
-| Disagg-IS oracle | yes (exact) | 0.023 | 2.347 |
-| G-PMC AIS | yes | 0.032 | 2.334 |
-| **Hierarchical JEPA-CVaR** | **no — scalar reward only** | **0.077** | **2.306** |
+**Result (budget=20k, 10 replications — not a single point estimate):**
 
-The agent doesn't quite reach G-PMC AIS's density-matching accuracy at this budget, but its CVaR point estimate is competitive (and its own KS is within paper 1's reported 0.017–0.113 band even though it's compared against paper 2's stricter <5% target). Reported honestly, not cherry-picked — see `src/cvar_psha/methods/jepa_cvar.py` docstring for the known REINFORCE step-size instability this required fixing (LR annealing + Polyak tail-averaging).
+| Method | KS vs `q_disagg` (mean ± std) | CVaR estimate mean ± std | \|bias\| | RMSE |
+|---|---|---|---|---|
+| Naive MC | 0.503 ± 0.000 | 2.339 ± 0.049 | 0.75% | 0.0520 |
+| G-PMC AIS (given closed form) | **0.038 ± 0.007** | 2.321 ± 0.033 | **0.03%** | 0.0327 |
+| Hierarchical JEPA-CVaR (scalar reward only) | 0.092 ± 0.015 | 2.306 ± 0.018 | 0.67% | **0.0240** |
+
+(true CVaR = 2.3219)
+
+Direct answers, since the honest picture is mixed and metric-dependent:
+- **Density match vs G-PMC AIS: loses, clearly.** ~2.4× worse KS (0.092 vs 0.038), non-overlapping across 10 reps. It beats Naive MC (0.503) but does not beat G-PMC AIS.
+- **CVaR error vs G-PMC AIS: depends on the metric.** G-PMC AIS has essentially zero mean bias (0.03%) and wins on bias. Hierarchical JEPA-CVaR is consistently biased ~0.7% low, but its variance across replications is under half of G-PMC AIS's and less than half of Naive MC's — low enough that its **RMSE ends up lowest of the three** (0.0240 vs 0.0327 vs 0.0520). Plausible explanation: the dual variable directly targets CVaR-tracking rather than density matching, at the cost of a small systematic bias worth investigating further, not a clean unqualified win.
 
 Outputs: `results/continuous/` (`cvar_convergence.png`, `ess_comparison.png`, `continuous_theta_comparison.png`)
+
+### Toward a real JEPA-CVaR algorithm
+
+The above is a scoped, honestly-labeled analog. Closing the gap to something that deserves the name without qualifiers would need, roughly in order of expected impact:
+
+1. **Tilt the joint, not just θ.** Let the Worker also propose an aleatory correction to `y | θ` (e.g. a learned shift/scale on the sampling of `ln Y`), with the importance weight computed over the full joint `q(θ, y)`. This is the only way to approach the true zero-variance CVaR target rather than the θ-marginal-only target every method here (including G-PMC AIS) is limited to.
+2. **A real CVaR policy gradient**, replacing the drift-penalizing dual heuristic — e.g. Tamar, Glynn & Mannor (2015)'s CVaR policy gradient theorem, or a properly derived CPO with trust-region KKT conditions (Chow & Ghavamzadeh), rather than a hand-tuned Lagrangian proxy.
+3. **A genuinely hierarchical (multi-scale) JEPA**, predicting at more than one level of abstraction (e.g. a coarse "region of θ-space" predictor feeding a fine "exact θ" predictor, each with its own target encoder/EMA pair), rather than the current single-level context/target pair.
+4. **A deeper encoder** (hidden layers, larger `embed_dim`) once (1)–(3) justify the added capacity — right now the bottleneck is the algorithm, not encoder width.
+5. Re-run the RMSE/KS comparison at several budgets and seeds-per-budget (10 reps is a first read, not a settled result) to see whether the low-bias/low-variance trade this version shows is a real property of CVaR-shaped objectives or an artifact of this budget/config.
 
 ### 2D multi-site portfolio hazard MDP
 

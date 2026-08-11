@@ -1,4 +1,17 @@
-"""Large-sample ground truth for the 3-node logic-tree MDP."""
+"""Exact (closed-form) ground truth for the 3-node logic-tree MDP.
+
+See `disaggregation.py` for the underlying closed-form lognormal identities
+and the theoretical grounding (Houng & Ceferino, 2025,
+https://doi.org/10.1785/0120240153): the optimal IS distribution for
+exceedance-probability estimation equals the hazard disaggregation
+distribution, q_disagg(path) prop to prior(path) * P(Y>v|path). We also
+report our CVaR (severity-weighted) extension, q_star.
+
+Each full path through the tree pins down a single leaf lognormal
+(ln Y | path ~ N(mu_path, sigma_path)), so VaR/CVaR/disaggregation over the
+full path-mixture are closed-form (up to a 1-D root-find for VaR) -- no
+Monte Carlo sampling noise, unlike the previous nested-MC estimate.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +19,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from cvar_psha.disaggregation import (
+    cvar_disaggregation_weights,
+    disaggregation_weights,
+    exact_var_cvar,
+)
 from cvar_psha.tree_env import TreeLogicEnv
 
 
@@ -15,8 +33,17 @@ class TreeGroundTruth:
     cvar: float
     n: int
     percentile: float
-    q_star: np.ndarray  # categorical over full paths
+    q_star: np.ndarray  # categorical over full paths (CVaR-optimal, ours)
+    q_disagg: np.ndarray  # categorical over full paths (paper-1 proven-optimal)
     path_labels: list[str]
+
+
+def _path_leaf_params(env: TreeLogicEnv) -> tuple[np.ndarray, np.ndarray]:
+    mus = np.empty(env.n_paths, dtype=float)
+    sigmas = np.empty(env.n_paths, dtype=float)
+    for i, path in enumerate(env.paths):
+        mus[i], sigmas[i] = env.leaf_params(path)
+    return mus, sigmas
 
 
 def compute_tree_ground_truth(
@@ -24,39 +51,14 @@ def compute_tree_ground_truth(
     n: int = 1_000_000,
     percentile: float = 0.95,
 ) -> TreeGroundTruth:
-    """Estimate VaR/CVaR under path priors and a path-level IS reference q*."""
-    path_ids = env.rng.choice(env.n_paths, size=n, p=env.path_priors)
-    mus = np.empty(n, dtype=float)
-    sigmas = np.empty(n, dtype=float)
-    for i, path in enumerate(env.paths):
-        mu, sigma = env.leaf_params(path)
-        mask = path_ids == i
-        mus[mask] = mu
-        sigmas[mask] = sigma
-    ys = np.exp(env.rng.normal(mus, sigmas))
+    """Exact VaR/CVaR/q_star/q_disagg under path priors (closed-form;
+    `n` is unused, kept for API compatibility)."""
+    mus, sigmas = _path_leaf_params(env)
+    priors = env.path_priors
 
-    v = float(np.quantile(ys, percentile))
-    tail = ys[ys > v]
-    if tail.size == 0:
-        raise RuntimeError("No exceedances in tree ground-truth sample; increase n.")
-    cvar = float(tail.mean())
-
-    # Path contributions ~ prior(path) * P(Y>v|path) * E[Y | Y>v, path]
-    contributions = np.zeros(env.n_paths, dtype=float)
-    m = max(n // env.n_paths, 10_000)
-    for i, path in enumerate(env.paths):
-        mu, sigma = env.leaf_params(path)
-        ln_y = env.rng.normal(mu, sigma, size=m)
-        y = np.exp(ln_y)
-        exceed = y > v
-        if np.any(exceed):
-            contributions[i] = (
-                env.path_priors[i] * float(exceed.mean()) * float(y[exceed].mean())
-            )
-    if contributions.sum() <= 0:
-        q_star = env.path_priors.copy()
-    else:
-        q_star = contributions / contributions.sum()
+    v, cvar = exact_var_cvar(percentile, priors, mus, sigmas)
+    q_star = cvar_disaggregation_weights(priors, mus, sigmas, v)
+    q_disagg = disaggregation_weights(priors, mus, sigmas, v)
 
     labels = [
         "/".join(env.nodes[d].branches[a].name for d, a in enumerate(path))
@@ -68,5 +70,6 @@ def compute_tree_ground_truth(
         n=n,
         percentile=percentile,
         q_star=q_star,
+        q_disagg=q_disagg,
         path_labels=labels,
     )

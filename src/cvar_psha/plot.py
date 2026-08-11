@@ -36,6 +36,7 @@ def plot_analysis_comparisons(
     palette = {
         "Naive MC": "#7a7a7a",
         "q* oracle": "#1f1f1f",
+        "Disagg-IS oracle": "#555555",
         "CEM-IS": "#c4a35a",
         "Flat Exp3": "#6c8ebf",
         "Flat REINFORCE": "#8eb0d9",
@@ -43,10 +44,13 @@ def plot_analysis_comparisons(
         "REINFORCE": "#8eb0d9",
         "Hierarchical": "#c0392b",
         "CVaR-CPO": "#1a7a4c",
+        "G-PMC AIS": "#8e44ad",
+        "G-PMC AIS (CVaR)": "#8e44ad",
+        "Hierarchical JEPA-CVaR": "#c0392b",
     }
 
     # Emphasize Hierarchical vs baselines.
-    highlight = {"Hierarchical", "q* oracle", "Naive MC"}
+    highlight = {"Hierarchical", "q* oracle", "Naive MC", "Hierarchical JEPA-CVaR", "G-PMC AIS"}
 
     # --- Plot 1: CVaR convergence ---
     fig1, ax1 = plt.subplots(figsize=(8.5, 5.0), constrained_layout=True)
@@ -257,3 +261,58 @@ def plot_final_policies(
     fig.savefig(policy_path, dpi=150)
     plt.close(fig)
     return policy_path
+
+
+def plot_continuous_theta_comparison(
+    nodes: np.ndarray,
+    q_disagg: np.ndarray,
+    method_means: dict[str, np.ndarray],
+    output_dir: Path,
+    q_star: np.ndarray | None = None,
+) -> Path:
+    """Scatter the quadrature grid (colored by q_disagg mass) and overlay
+    each method's fitted/reported theta mean, for the continuous-epistemic
+    environment."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(7.5, 6.0), constrained_layout=True)
+    sc = ax.scatter(
+        nodes[:, 0], nodes[:, 1], c=q_disagg, cmap="magma", s=14, alpha=0.85, linewidths=0
+    )
+    fig.colorbar(sc, ax=ax, label="q_disagg mass (paper-1 proven-optimal)")
+
+    palette = {
+        "Naive MC": "#7a7a7a",
+        "Disagg-IS oracle": "#1f1f1f",
+        "G-PMC AIS": "#8e44ad",
+        "Hierarchical JEPA-CVaR": "#c0392b",
+    }
+    markers = {
+        "Naive MC": "o",
+        "Disagg-IS oracle": "*",
+        "G-PMC AIS": "s",
+        "Hierarchical JEPA-CVaR": "D",
+    }
+    for name, mean in method_means.items():
+        ax.scatter(
+            [mean[0]],
+            [mean[1]],
+            color=palette.get(name, "white"),
+            marker=markers.get(name, "P"),
+            s=170,
+            edgecolor="white",
+            linewidth=1.3,
+            label=name,
+            zorder=5,
+        )
+
+    ax.set_xlabel(r"$\theta_\mu$ (median-GMPE epistemic offset)")
+    ax.set_ylabel(r"$\theta_\sigma$ (aleatory-sigma epistemic scale)")
+    ax.set_title("Continuous epistemic space: disaggregation mass vs learned proposals")
+    ax.legend(fontsize=8, framealpha=0.95, loc="best")
+    ax.grid(True, alpha=0.25)
+    out = output_dir / "continuous_theta_comparison.png"
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+    return out

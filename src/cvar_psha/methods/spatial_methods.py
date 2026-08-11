@@ -9,23 +9,8 @@ import numpy as np
 from cvar_psha.estimators import OnlineCVaRTracker, path_tail_reward
 from cvar_psha.methods import MethodResult
 from cvar_psha.methods.tree_common import softmax
+from cvar_psha.metrics import kl_divergence, ks_statistic, tv_distance  # noqa: F401  (re-exported)
 from cvar_psha.spatial_env import MANAGER_DEPTHS, SpatialPortfolioEnv
-
-
-def kl_divergence(p: np.ndarray, q: np.ndarray, eps: float = 1e-12) -> float:
-    p = np.clip(np.asarray(p, dtype=float), eps, None)
-    q = np.clip(np.asarray(q, dtype=float), eps, None)
-    p = p / p.sum()
-    q = q / q.sum()
-    return float(np.sum(p * np.log(p / q)))
-
-
-def tv_distance(p: np.ndarray, q: np.ndarray) -> float:
-    p = np.asarray(p, dtype=float)
-    q = np.asarray(q, dtype=float)
-    p = p / p.sum()
-    q = q / q.sum()
-    return 0.5 * float(np.abs(p - q).sum())
 
 
 def softmax_temperature(logits: np.ndarray, temperature: float = 1.0) -> np.ndarray:

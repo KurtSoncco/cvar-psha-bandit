@@ -1,0 +1,35 @@
+# Continuous-epistemic-space experiment (paper 2 style): median-GMPE and
+# aleatory-sigma epistemic uncertainty as a continuous Gaussian prior over
+# theta = (theta_mu, theta_sigma), instead of discrete logic-tree branches.
+# See src/cvar_psha/continuous_env.py.
+
+continuous:
+  mu0: -1.0
+  sigma0: 0.6
+  tau_mu: 0.5
+  tau_sigma: 0.35
+  s_max: 0.5
+
+seed: 42
+percentile: 0.95
+quadrature_deg: 40
+
+budget: 20000
+eval_every: 500
+n_replications: 5
+
+output_dir: results/continuous
+
+gpmc_ais:
+  batch_size: 300
+  smoothing: 0.5
+  cov_inflation: 1.15
+  defensive_eps: 0.1
+  target: disagg  # paper-1/2 proven-optimal target; use "cvar" for the severity-weighted variant
+
+jepa_cvar:
+  manager_lr: 0.02
+  worker_lr: 0.08
+  std_start: 0.9
+  std_end: 0.35
+  jepa_train_every: 16

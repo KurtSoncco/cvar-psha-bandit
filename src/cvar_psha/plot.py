@@ -10,7 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from cvar_psha.methods import MethodResult
+from cvar_psha.core.result import MethodResult
 
 
 def _aggregate_replications(

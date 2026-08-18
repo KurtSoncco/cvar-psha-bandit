@@ -1,3 +1,4 @@
+# Legacy path. Canonical config: experiments/continuous/config.yaml
 # Continuous-epistemic-space experiment (paper 2 style): median-GMPE and
 # aleatory-sigma epistemic uncertainty as a continuous Gaussian prior over
 # theta = (theta_mu, theta_sigma), instead of discrete logic-tree branches.

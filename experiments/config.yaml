@@ -1,3 +1,5 @@
+# Legacy path. Canonical config: experiments/1node/config.yaml
+
 seed: 42
 
 arms:
@@ -49,4 +51,4 @@ sto_assign:
   entropy_coef: 0.02
   kl_stop: 0.05
 
-output_dir: results
+output_dir: results/1node

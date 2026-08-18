@@ -19,11 +19,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from cvar_psha.disaggregation import (
-    cvar_disaggregation_weights,
-    disaggregation_weights,
-    exact_var_cvar,
-)
+from cvar_psha.core.disaggregation import closed_form_targets
 from cvar_psha.tree_env import TreeLogicEnv
 
 
@@ -54,11 +50,9 @@ def compute_tree_ground_truth(
     """Exact VaR/CVaR/q_star/q_disagg under path priors (closed-form;
     `n` is unused, kept for API compatibility)."""
     mus, sigmas = _path_leaf_params(env)
-    priors = env.path_priors
-
-    v, cvar = exact_var_cvar(percentile, priors, mus, sigmas)
-    q_star = cvar_disaggregation_weights(priors, mus, sigmas, v)
-    q_disagg = disaggregation_weights(priors, mus, sigmas, v)
+    v, cvar, q_star, q_disagg = closed_form_targets(
+        env.path_priors, mus, sigmas, percentile
+    )
 
     labels = [
         "/".join(env.nodes[d].branches[a].name for d, a in enumerate(path))

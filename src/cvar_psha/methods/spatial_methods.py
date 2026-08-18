@@ -2,22 +2,18 @@
 
 from __future__ import annotations
 
-from itertools import product
-
 import numpy as np
 
-from cvar_psha.estimators import OnlineCVaRTracker, path_tail_reward
-from cvar_psha.methods import MethodResult
-from cvar_psha.methods.tree_common import softmax
-from cvar_psha.metrics import kl_divergence, ks_statistic, tv_distance  # noqa: F401  (re-exported)
+from cvar_psha.core.categorical import FlatPathProblem
+from cvar_psha.core.categorical import run_cvar_cpo as _run_cvar_cpo
+from cvar_psha.core.categorical import run_mc as _run_mc
+from cvar_psha.core.categorical import run_oracle as _run_oracle
+from cvar_psha.core.categorical import run_reinforce as _run_reinforce
+from cvar_psha.core.estimators import OnlineCVaRTracker, path_tail_reward
+from cvar_psha.core.metrics import kl_divergence, tv_distance
+from cvar_psha.core.policy import TabularTreePolicy
+from cvar_psha.core.result import MethodResult
 from cvar_psha.spatial_env import MANAGER_DEPTHS, SpatialPortfolioEnv
-
-
-def softmax_temperature(logits: np.ndarray, temperature: float = 1.0) -> np.ndarray:
-    t = max(float(temperature), 1e-4)
-    z = (logits - np.max(logits)) / t
-    e = np.exp(z)
-    return e / e.sum()
 
 
 def run_spatial_mc(
@@ -26,20 +22,7 @@ def run_spatial_mc(
     budget: int,
     eval_every: int = 500,
 ) -> MethodResult:
-    tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
-
-    def action_fn(state, prior):
-        a = int(env.rng.choice(len(prior), p=prior))
-        return a, float(prior[a])
-
-    for _ in range(budget):
-        _path, L, iw, _traj, _pga = env.rollout_with_policy(action_fn)
-        tracker.update(L, iw)
-    return MethodResult(
-        name="Naive MC",
-        metrics=tracker.finalize(),
-        final_q=env.path_priors.copy(),
-    )
+    return _run_mc(FlatPathProblem(env), v95, budget, eval_every=eval_every)
 
 
 def run_spatial_qstar(
@@ -49,17 +32,8 @@ def run_spatial_qstar(
     q_star: np.ndarray,
     eval_every: int = 500,
 ) -> MethodResult:
-    """Oracle IS: sample full paths from reference q* (mathematical upper baseline)."""
-    tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
-    q = np.asarray(q_star, dtype=float)
-    q = q / q.sum()
-    for _ in range(budget):
-        _path, L, iw, _pga = env.sample_path_from_flat_q(q)
-        tracker.update(L, iw)
-    return MethodResult(
-        name="q* oracle",
-        metrics=tracker.finalize(),
-        final_q=q.copy(),
+    return _run_oracle(
+        FlatPathProblem(env), v95, budget, q_star, name="q* oracle", eval_every=eval_every
     )
 
 
@@ -71,32 +45,15 @@ def run_spatial_flat_reinforce(
     baseline_alpha: float = 0.1,
     eval_every: int = 500,
 ) -> MethodResult:
-    tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
-    logits = np.log(np.clip(env.path_priors, 1e-12, None))
-    baseline = 0.0
-    r_max = 1e-8
-    q_last = env.path_priors.copy()
-
-    for _ in range(budget):
-        q = softmax(logits)
-        q_last = q
-        path, L, iw, _pga = env.sample_path_from_flat_q(q)
-        idx = env.path_index[path]
-        tracker.update(L, iw)
-
-        r = path_tail_reward(L, iw, v95)
-        r_max = max(r_max, abs(r), 1e-8)
-        r_scaled = r / r_max
-        advantage = r_scaled - baseline
-        baseline = (1.0 - baseline_alpha) * baseline + baseline_alpha * r_scaled
-        grad = -q
-        grad[idx] += 1.0
-        logits += learning_rate * advantage * grad
-
-    return MethodResult(
+    return _run_reinforce(
+        FlatPathProblem(env),
+        v95,
+        budget,
+        learning_rate=learning_rate,
+        baseline_alpha=baseline_alpha,
+        eval_every=eval_every,
+        q_init="prior",
         name="Flat REINFORCE",
-        metrics=tracker.finalize(),
-        final_q=q_last,
     )
 
 
@@ -113,61 +70,18 @@ def run_spatial_cvar_cpo(
     eval_every: int = 500,
     true_cvar: float | None = None,
 ) -> MethodResult:
-    """Flat CVaR-CPO with KL damping to previous q and pull toward path prior."""
-    tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
-    prior = env.path_priors / env.path_priors.sum()
-    logits = np.log(np.clip(prior, 1e-12, None))
-    lam = 0.0
-    target = true_cvar if true_cvar is not None else 0.0
-    has_target = true_cvar is not None
-    r_max = 1e-8
-    q_last = prior.copy()
-
-    for _ in range(budget):
-        q_old = softmax(logits)
-        q = q_old
-        q_last = q
-        path, L, iw, _pga = env.sample_path_from_flat_q(q)
-        idx = env.path_index[path]
-        tracker.update(L, iw)
-
-        cvar_hat = tracker.current_cvar()
-        if np.isfinite(cvar_hat):
-            if not has_target:
-                if target == 0.0:
-                    target = cvar_hat
-                else:
-                    target = (1.0 - target_ema) * target + target_ema * cvar_hat
-            violation = abs(cvar_hat - target) - cvar_tol * max(abs(target), 1e-6)
-            lam = max(0.0, lam + dual_lr * violation)
-
-        r = path_tail_reward(L, iw, v95)
-        r_max = max(r_max, abs(r), 1e-8)
-        r_scaled = r / r_max
-        soft_penalty = 0.0
-        if np.isfinite(cvar_hat) and target != 0.0:
-            soft_penalty = abs(cvar_hat - target) / max(abs(target), 1e-6)
-        advantage = r_scaled - lam * soft_penalty
-
-        grad = -q
-        grad[idx] += 1.0
-        logits = logits + learning_rate * advantage * grad
-
-        q_new = softmax(logits)
-        q_damped = (
-            (1.0 - kl_coef - prior_kl_coef) * q_new
-            + kl_coef * q_old
-            + prior_kl_coef * prior
-        )
-        q_damped = np.clip(q_damped, 1e-12, None)
-        q_damped /= q_damped.sum()
-        logits = np.log(q_damped)
-
-    return MethodResult(
-        name="CVaR-CPO",
-        metrics=tracker.finalize(),
-        final_q=q_last,
-        extras={"final_lambda": lam, "target": target},
+    return _run_cvar_cpo(
+        FlatPathProblem(env),
+        v95,
+        budget,
+        learning_rate=learning_rate,
+        dual_lr=dual_lr,
+        kl_coef=kl_coef,
+        prior_kl_coef=prior_kl_coef,
+        cvar_tol=cvar_tol,
+        target_ema=target_ema,
+        eval_every=eval_every,
+        true_cvar=true_cvar,
     )
 
 
@@ -176,19 +90,18 @@ class ManagerWorkerPolicy:
 
     def __init__(self, env: SpatialPortfolioEnv):
         self.env = env
-        self.logits: dict[tuple[int, tuple[int, ...]], np.ndarray] = {}
-        for d in range(env.depth):
-            if d == 0:
-                prefixes: list[tuple[int, ...]] = [()]
-            else:
-                ranges = [range(n) for n in env.n_actions[:d]]
-                prefixes = [tuple(p) for p in product(*ranges)]
-            for pref in prefixes:
-                prior = env.prior(pref)
-                self.logits[(d, pref)] = np.log(np.clip(prior, 1e-12, None)).copy()
+        self._table = TabularTreePolicy(
+            n_actions=env.n_actions,
+            prior_fn=env.prior,
+            logit_floor=1e-12,
+        )
+
+    @property
+    def logits(self):
+        return self._table.logits
 
     def probs(self, state: tuple[int, ...], temperature: float = 1.0) -> np.ndarray:
-        return softmax_temperature(self.logits[(len(state), state)], temperature)
+        return self._table.probs(state, temperature=temperature)
 
     def sample(
         self,
@@ -196,9 +109,7 @@ class ManagerWorkerPolicy:
         rng: np.random.Generator,
         temperature: float = 1.0,
     ) -> tuple[int, float, np.ndarray]:
-        q = self.probs(state, temperature=temperature)
-        a = int(rng.choice(len(q), p=q))
-        return a, float(q[a]), q
+        return self._table.sample(state, rng, temperature=temperature)
 
     def update_step(
         self,
@@ -209,32 +120,19 @@ class ManagerWorkerPolicy:
         entropy_coef: float = 0.0,
         temperature: float = 1.0,
     ) -> None:
-        d = len(state)
-        key = (d, state)
-        q = softmax_temperature(self.logits[key], temperature)
-        grad = -q
-        grad[action] += 1.0
-        # Entropy bonus gradient (encourage higher-entropy categorical).
-        if entropy_coef > 0:
-            ent_grad = -np.log(np.clip(q, 1e-12, None)) - 1.0
-            ent_grad -= np.sum(q * ent_grad)  # center in probability space (approx)
-            grad = grad + entropy_coef * ent_grad
-        lr = learning_rate
-        if d in MANAGER_DEPTHS:
-            lr *= 1.0  # manager scale applied by caller
-        self.logits[key] = self.logits[key] + lr * advantage * grad
+        self._table.update_step(
+            state,
+            action,
+            advantage,
+            learning_rate,
+            entropy_coef=entropy_coef,
+            temperature=temperature,
+        )
 
     def path_distribution(self, temperature: float = 1.0) -> np.ndarray:
-        q_path = np.zeros(self.env.n_paths, dtype=float)
-        for i, path in enumerate(self.env.paths):
-            p = 1.0
-            state: tuple[int, ...] = ()
-            for a in path:
-                p *= float(self.probs(state, temperature=temperature)[a])
-                state = state + (a,)
-            q_path[i] = p
-        s = q_path.sum()
-        return q_path / s if s > 0 else self.env.path_priors.copy()
+        return self._table.path_distribution(
+            self.env.paths, temperature=temperature, fallback=self.env.path_priors
+        )
 
 
 def _gae_advantages(

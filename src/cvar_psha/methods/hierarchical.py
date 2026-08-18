@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from itertools import product
-
 import numpy as np
 
-from cvar_psha.estimators import OnlineCVaRTracker, path_tail_reward
-from cvar_psha.methods import MethodResult
-from cvar_psha.methods.tree_common import softmax
+from cvar_psha.core.estimators import OnlineCVaRTracker, path_tail_reward
+from cvar_psha.core.policy import EMABaseline, RewardScaler, TabularTreePolicy
+from cvar_psha.core.result import MethodResult
 from cvar_psha.tree_env import TreeLogicEnv
 
 
@@ -17,53 +15,30 @@ class HierarchicalPolicy:
 
     def __init__(self, env: TreeLogicEnv):
         self.env = env
-        self.logits: dict[tuple[int, tuple[int, ...]], np.ndarray] = {}
-        for d, node in enumerate(env.nodes):
-            if d == 0:
-                prefixes: list[tuple[int, ...]] = [()]
-            else:
-                ranges = [range(n) for n in env.n_actions[:d]]
-                prefixes = [tuple(p) for p in product(*ranges)]
-            for pref in prefixes:
-                prior = node.weights
-                self.logits[(d, pref)] = np.log(np.clip(prior, 1e-8, None)).copy()
+        self._table = TabularTreePolicy(
+            n_actions=env.n_actions,
+            prior_fn=lambda pref: env.nodes[len(pref)].weights,
+        )
+
+    @property
+    def logits(self):
+        return self._table.logits
 
     def probs(self, state: tuple[int, ...]) -> np.ndarray:
-        d = len(state)
-        return softmax(self.logits[(d, state)])
+        return self._table.probs(state)
 
     def sample(self, state: tuple[int, ...], rng: np.random.Generator) -> tuple[int, float]:
-        q = self.probs(state)
-        a = int(rng.choice(len(q), p=q))
-        return a, float(q[a])
+        a, q_prob, _q = self._table.sample(state, rng)
+        return a, q_prob
 
-    def update(
-        self,
-        traj: list[dict],
-        advantage: float,
-        learning_rate: float,
-    ) -> None:
+    def update(self, traj: list[dict], advantage: float, learning_rate: float) -> None:
         for step in traj:
-            state = step["state"]
-            action = step["action"]
-            d = step["depth"]
-            key = (d, state)
-            q = softmax(self.logits[key])
-            grad = -q
-            grad[action] += 1.0
-            self.logits[key] = self.logits[key] + learning_rate * advantage * grad
+            self._table.update_step(
+                step["state"], step["action"], advantage, learning_rate
+            )
 
     def path_distribution(self) -> np.ndarray:
-        """Marginal probability of each full path under the hierarchical policy."""
-        q_path = np.zeros(self.env.n_paths, dtype=float)
-        for i, path in enumerate(self.env.paths):
-            p = 1.0
-            state: tuple[int, ...] = ()
-            for a in path:
-                p *= float(self.probs(state)[a])
-                state = state + (a,)
-            q_path[i] = p
-        return q_path / max(q_path.sum(), 1e-12)
+        return self._table.path_distribution(self.env.paths, fallback=self.env.path_priors)
 
 
 def run_hierarchical(
@@ -76,21 +51,16 @@ def run_hierarchical(
 ) -> MethodResult:
     tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
     policy = HierarchicalPolicy(env)
-    baseline = 0.0
-    r_max = 1e-8
+    baseline = EMABaseline(baseline_alpha)
+    scaler = RewardScaler()
 
     for _ in range(budget):
         def action_fn(state, prior):
             return policy.sample(state, env.rng)
 
-        path, y, iw, traj = env.rollout_with_policy(action_fn)
+        _path, y, iw, traj = env.rollout_with_policy(action_fn)
         tracker.update(y, iw)
-
-        r = path_tail_reward(y, iw, v95)
-        r_max = max(r_max, abs(r), 1e-8)
-        r_scaled = r / r_max
-        advantage = r_scaled - baseline
-        baseline = (1.0 - baseline_alpha) * baseline + baseline_alpha * r_scaled
+        advantage = baseline.advantage(scaler.scale(path_tail_reward(y, iw, v95)))
         policy.update(traj, advantage, learning_rate)
 
     return MethodResult(

@@ -1,12 +1,16 @@
-"""Naive Monte Carlo using the epistemic prior weights."""
+"""1-node GMM bandit methods (thin wrappers around ``core.categorical``)."""
 
 from __future__ import annotations
 
 import numpy as np
 
+from cvar_psha.core.categorical import BanditProblem, run_cem as _run_cem
+from cvar_psha.core.categorical import run_exp3 as _run_exp3
+from cvar_psha.core.categorical import run_mc as _run_mc
+from cvar_psha.core.categorical import run_oracle as _run_oracle
+from cvar_psha.core.categorical import run_reinforce as _run_reinforce
+from cvar_psha.core.result import MethodResult
 from cvar_psha.env import LogicTreeEnv
-from cvar_psha.estimators import OnlineCVaRTracker, importance_weight
-from cvar_psha.methods import MethodResult
 
 
 def run_mc(
@@ -15,15 +19,7 @@ def run_mc(
     budget: int,
     eval_every: int = 200,
 ) -> MethodResult:
-    tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
-    q = env.weights.copy()
-
-    for _ in range(budget):
-        arm, y = env.step(q)
-        w = importance_weight(env.weights[arm], q[arm])
-        tracker.update(y, w)
-
-    return MethodResult(name="Naive MC", metrics=tracker.finalize(), final_q=q)
+    return _run_mc(BanditProblem(env), v95, budget, eval_every=eval_every)
 
 
 def run_oracle(
@@ -34,16 +30,54 @@ def run_oracle(
     name: str = "q* oracle",
     eval_every: int = 200,
 ) -> MethodResult:
-    """Sample arms directly from a fixed reference distribution q (e.g. the
-    closed-form q_star or q_disagg from ground_truth.py) -- a static,
-    non-learning IS baseline analogous to the papers' (adaptive but
-    ultimately static-per-run) disaggregation-informed proposal."""
-    tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
-    q = np.asarray(q, dtype=float)
-    q = q / q.sum()
-    for _ in range(budget):
-        arm = int(env.rng.choice(env.n_arms, p=q))
-        y = env.sample_ground_motion(arm)
-        w = importance_weight(env.weights[arm], q[arm])
-        tracker.update(y, w)
-    return MethodResult(name=name, metrics=tracker.finalize(), final_q=q.copy())
+    return _run_oracle(BanditProblem(env), v95, budget, q, name=name, eval_every=eval_every)
+
+
+def run_exp3(
+    env: LogicTreeEnv,
+    v95: float,
+    budget: int,
+    gamma: float = 0.05,
+    eval_every: int = 200,
+) -> MethodResult:
+    return _run_exp3(BanditProblem(env), v95, budget, gamma=gamma, eval_every=eval_every)
+
+
+def run_reinforce(
+    env: LogicTreeEnv,
+    v95: float,
+    budget: int,
+    learning_rate: float = 0.05,
+    baseline_alpha: float = 0.1,
+    eval_every: int = 200,
+) -> MethodResult:
+    return _run_reinforce(
+        BanditProblem(env),
+        v95,
+        budget,
+        learning_rate=learning_rate,
+        baseline_alpha=baseline_alpha,
+        eval_every=eval_every,
+    )
+
+
+def run_cem(
+    env: LogicTreeEnv,
+    v95: float,
+    budget: int,
+    batch_size: int = 500,
+    elite_frac: float = 0.05,
+    smoothing: float = 0.7,
+    eval_every: int = 200,
+    q_init: np.ndarray | None = None,
+) -> MethodResult:
+    return _run_cem(
+        BanditProblem(env),
+        v95,
+        budget,
+        batch_size=batch_size,
+        elite_frac=elite_frac,
+        smoothing=smoothing,
+        eval_every=eval_every,
+        q_init=q_init,
+    )

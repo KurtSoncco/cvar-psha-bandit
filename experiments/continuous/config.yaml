@@ -1,0 +1,65 @@
+# Canonical copy of the continuous-epistemic experiment.
+# Also available at experiments/config_continuous.yaml for older commands.
+# See src/cvar_psha/continuous_env.py.
+
+continuous:
+  mu0: -1.0
+  sigma0: 0.6
+  tau_mu: 0.5
+  tau_sigma: 0.35
+  s_max: 0.5
+
+seed: 42
+percentile: 0.95
+quadrature_deg: 40
+
+budget: 20000
+eval_every: 500
+n_replications: 5
+
+output_dir: results/continuous
+
+gpmc_ais:
+  batch_size: 300
+  smoothing: 0.5
+  cov_inflation: 1.15
+  defensive_eps: 0.1
+  target: disagg  # paper-1/2 proven-optimal target; use "cvar" for the severity-weighted variant
+
+jepa_cvar:
+  manager_lr: 0.02
+  worker_lr: 0.08
+  std_start: 0.9
+  std_end: 0.35
+  jepa_train_every: 16
+  v2_batch_size: 300
+  v2_smoothing: 0.5
+  v2_cov_inflation: 1.15
+  v2_defensive_eps: 0.1
+  v2_joint_tilt: true
+  v2_hierarchical: true
+  v2_use_psis: true
+  v2_mixture_window: 6
+  v2_tilt_cap: 1.0
+
+cvar_bf:
+  learning_rate: 0.05
+  beta_lr: 0.03
+  delta_lr: 0.03
+  std_start: 0.9
+  std_end: 0.35
+  beta_init: 0.95
+  beta_min: 0.50
+  beta_max: 0.99
+  delta_max: 0.5
+  defensive_eps: 0.1
+
+qr_srm:
+  batch_size: 300
+  smoothing: 0.5
+  cov_inflation: 1.15
+  defensive_eps: 0.1
+  n_quantiles: 32
+  spectrum: srm_mix
+  lambda_mean: 0.10
+  qr_lr: 0.08

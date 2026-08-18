@@ -27,12 +27,13 @@ from __future__ import annotations
 import numpy as np
 
 from cvar_psha.continuous_env import ContinuousEpistemicEnv, GaussianProposal
-from cvar_psha.disaggregation import (
+from cvar_psha.core.disaggregation import (
     lognormal_exceedance_prob,
     lognormal_tail_mean_unnormalized,
 )
-from cvar_psha.estimators import OnlineCVaRTracker
-from cvar_psha.methods import MethodResult
+from cvar_psha.core.estimators import OnlineCVaRTracker
+from cvar_psha.core.gaussian import weighted_gaussian_moments
+from cvar_psha.core.result import MethodResult
 
 
 def run_gpmc_ais(
@@ -100,13 +101,11 @@ def run_gpmc_ais(
             relevance = lognormal_exceedance_prob(mu_leaf, sigma_leaf, v95)
         target_unnorm = prior_pdf * relevance
         pmc_w = target_unnorm / np.clip(q_mix_pdf, 1e-300, None)
-        wsum = pmc_w.sum()
-        if wsum > 0:
-            w_norm = pmc_w / wsum
-            mean_hat = (w_norm[:, None] * thetas).sum(axis=0)
-            diff = thetas - mean_hat[None, :]
-            cov_hat = (w_norm[:, None, None] * (diff[:, :, None] * diff[:, None, :])).sum(axis=0)
-            cov_hat = cov_hat * cov_inflation + cov_floor
+        moments = weighted_gaussian_moments(
+            thetas, pmc_w, cov_inflation=cov_inflation, cov_floor=cov_floor
+        )
+        if moments is not None:
+            mean_hat, cov_hat = moments
             mean = smoothing * mean_hat + (1.0 - smoothing) * mean
             cov = smoothing * cov_hat + (1.0 - smoothing) * cov
             proposal = GaussianProposal(mean, cov)

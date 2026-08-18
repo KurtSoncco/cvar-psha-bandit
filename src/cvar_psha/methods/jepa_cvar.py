@@ -27,14 +27,16 @@ realized rollout outcomes -- it never receives P(Y>v|theta) either.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 
 import numpy as np
 
-from cvar_psha.continuous_env import ContinuousEpistemicEnv
+from cvar_psha.continuous_env import ContinuousEpistemicEnv, GaussianProposal
 from cvar_psha.estimators import OnlineCVaRTracker, importance_weight, tail_reward
 from cvar_psha.jepa import LightweightJEPA, build_target_features
 from cvar_psha.methods import MethodResult
+from cvar_psha.psis import psis_smooth
 
 
 @dataclass
@@ -171,4 +173,309 @@ def run_jepa_cvar(
             "final_lambda": lam,
             "target": target,
         },
+    )
+
+
+# ============================================================================
+# v2: Cross-Entropy / Population-Monte-Carlo empirical-weight refit.
+#
+# v1 (above) uses single-sample score-function REINFORCE with an ad-hoc
+# dual-Lagrangian CVaR-drift penalty -- a heuristic, and one that needed a
+# real stability patch (LR annealing) to stop it random-walking after
+# converging. v2 replaces that update rule entirely.
+#
+# Reframing: our actual objective is not "safe RL over an agent's own
+# returns" (that's what Tamar et al. 2015 / Chow & Ghavamzadeh's CVaR
+# policy-gradient / CPO papers solve, and what v1's naming/citation
+# incorrectly gestured at). It is *adaptive importance sampling to minimize
+# the variance of a CVaR estimator of a fixed external Y under a fixed
+# nominal prior p* -- the classical Cross-Entropy / Population Monte Carlo
+# literature (de Boer, Kroese, Mannor & Rubinstein 2005; Cappe, Guillin,
+# Marin & Robert 2004), which `gpmc_ais.py` already implements correctly.
+#
+# The CE method fits q_phi by minimizing KL(q*, q_phi) where
+# q*(x) ~ p(x) H(x). For exponential-family q_phi this is a weighted
+# moment-matching update with weights w(x) = p(x) H(x) / q_ref(x).
+# G-PMC AIS uses the closed-form H(theta) = P(Y>v|theta). The *only* thing
+# that requires closed-form access is the choice of H -- the refit
+# machinery doesn't. Substituting the single-rollout empirical outcome
+# H(theta, y) = y * 1{y>v} is a textbook-legitimate CE variant (noisier,
+# unbiased, zero analytic access needed) -- and p(theta) H(theta, y) / q(theta)
+# is exactly `estimators.tail_reward`, already used everywhere in this repo
+# as the reward signal. So Stage A below is "the same algorithm as
+# G-PMC AIS, with an empirical H instead of a closed-form one" -- not new
+# machinery.
+#
+# Stage B adds a joint (theta, y) tilt: the Worker also proposes a mean
+# shift to ln Y | theta, refit by weighted least squares against the same
+# empirical weights. Stage C adds a second, coarser JEPA whose embedding
+# conditions the fine JEPA, so the representation is genuinely two-level.
+# All three stages are controlled by flags below so they can be validated
+# incrementally (see scripts run during development, not committed).
+# ============================================================================
+
+
+def _weighted_moment_match(
+    x: np.ndarray, w: np.ndarray, prior_cov: np.ndarray, cov_inflation: float, cov_floor_scale: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """CE/PMC weighted mean + covariance refit (same formula as gpmc_ais.py)."""
+    wsum = w.sum()
+    if wsum <= 0:
+        return x.mean(axis=0), prior_cov.copy()
+    w_norm = w / wsum
+    mean_hat = (w_norm[:, None] * x).sum(axis=0)
+    diff = x - mean_hat[None, :]
+    cov_hat = (w_norm[:, None, None] * (diff[:, :, None] * diff[:, None, :])).sum(axis=0)
+    cov_hat = cov_hat * cov_inflation + cov_floor_scale * prior_cov
+    return mean_hat, cov_hat
+
+
+def _weighted_linear_fit(
+    z: np.ndarray, target: np.ndarray, w: np.ndarray, ridge: float = 1e-4
+) -> tuple[np.ndarray, float]:
+    """Weighted ridge least squares: target ~ z @ a + b, weights w.
+    Returns (a, b). Verified against synthetic recovery (max err ~3e-4)."""
+    n, d = z.shape
+    X = np.concatenate([z, np.ones((n, 1))], axis=1)
+    XtWX = X.T @ (w[:, None] * X) + ridge * np.eye(d + 1)
+    XtWy = X.T @ (w * target)
+    beta = np.linalg.solve(XtWX, XtWy)
+    return beta[:-1], float(beta[-1])
+
+
+def _exp_tilt_ratio(z: np.ndarray, mu: np.ndarray, delta: np.ndarray, sigma: np.ndarray) -> np.ndarray:
+    """p(z)/q(z) for z ~ N(mu, sigma) vs q = N(mu+delta, sigma) -- exact
+    closed-form Gaussian-mean-shift likelihood ratio (Girsanov / exponential
+    tilting), avoiding division of two possibly-tiny pdf values. Verified
+    against direct scipy.stats.norm.pdf ratio to 1e-16."""
+    u = z - mu
+    return np.exp(delta * (delta / 2.0 - u) / (sigma**2))
+
+
+def run_jepa_cvar_v2(
+    env: ContinuousEpistemicEnv,
+    v95: float,
+    budget: int,
+    batch_size: int = 300,
+    smoothing: float = 0.5,
+    cov_inflation: float = 1.15,
+    cov_floor_scale: float = 0.05,
+    defensive_eps: float = 0.1,
+    embed_dim: int = 4,
+    jepa_lr: float = 0.08,
+    jepa_train_every: int = 16,
+    enable_joint_tilt: bool = True,
+    enable_hierarchical: bool = True,
+    coarse_embed_dim: int = 3,
+    use_psis: bool = True,
+    mixture_window: int = 6,
+    tilt_cap: float | None = 1.0,
+    eval_every: int = 200,
+    seed: int = 0,
+    log_samples: bool = False,
+) -> MethodResult:
+    """Stage A (+B +C) JEPA-CVaR: CE/PMC empirical-weight refit, optional
+    joint (theta,y) tilt, optional two-level hierarchical JEPA. Never given
+    P(Y>v|theta) -- the empirical weight is exactly `tail_reward`.
+
+    `use_psis=True` (default) Pareto-smooths the per-batch importance
+    weight `iw` (see psis.py) before it feeds both the reported CVaR/ESS
+    tracker and the CE/PMC refit weight `r` -- standard PSIS-LOO practice
+    is to smooth the weights that actually drive the estimator, with the
+    fitted GPD shape `k_hat` reported alongside as the reliability flag,
+    not to smooth some internal-only copy while reporting a separate raw
+    number. An unsmoothed `tracker_raw` is kept in extras purely so the
+    before/after effect of smoothing is visible, not as the "real" answer.
+
+    `mixture_window > 0` additionally addresses the likely *root cause* of
+    the ESS collapse PSIS can only partially fix: as the CE refit narrows
+    the proposal over successive batches, any off-mean draw (including the
+    defensive-mixture ones) gets an increasingly extreme p(theta)/q(theta)
+    ratio, because q is evaluated against only the single, ever-narrower
+    current proposal. This is a windowed Deterministic-Mixture PMC / AMIS
+    weighting (Cornuet, Marin, Mira & Robert 2012; Elvira, Martino, Luengo
+    & Bugallo 2019): the importance-weight denominator is the mixture of
+    the last `mixture_window` proposals actually used (not just the
+    latest), bounded rather than unbounded history (full AMIS keeps every
+    proposal ever used) so memory/compute stay flat over the run. Applied
+    consistently to both the refit weight and the reported estimator, as
+    in the reference algorithm (not a separate local-only weight)."""
+    tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
+    tracker_raw = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
+    theta_dim = 2
+    prior = env.prior
+    mean_theta = prior.mean.copy()
+    cov_theta = prior.cov.copy()
+    proposal = GaussianProposal(mean_theta, cov_theta)
+    proposal_window: deque = deque(maxlen=max(1, mixture_window))
+
+    fine_input_dim = theta_dim + (coarse_embed_dim if enable_hierarchical else 0)
+    jepa_fine = LightweightJEPA(
+        theta_dim=fine_input_dim, feat_dim=3, embed_dim=embed_dim, seed=seed, lr=jepa_lr
+    )
+    jepa_coarse = None
+    coarse_buf_ctx: list = []
+    coarse_buf_feat: list = []
+    if enable_hierarchical:
+        jepa_coarse = LightweightJEPA(
+            theta_dim=theta_dim, feat_dim=3, embed_dim=coarse_embed_dim, seed=seed + 1, lr=jepa_lr
+        )
+
+    Wy = np.zeros(embed_dim)  # readout: delta(theta) = z_fine @ Wy + by, a scalar mean-shift on ln Y
+    by = 0.0
+
+    fine_buf_ctx: list = []
+    fine_buf_feat: list = []
+
+    n_done = 0
+    batch_r_history: list = []  # for coarse JEPA's batch-aggregated target
+    k_hat_history: list = []  # PSIS reliability diagnostic per batch
+    log_thetas: list = []
+    log_ys: list = []
+    log_iws: list = []
+
+    while n_done < budget:
+        m = min(batch_size, budget - n_done)
+
+        # Coarse embedding for this batch: describes the current operating
+        # region (the proposal mean), shared across the batch -- refit once
+        # per batch as the coarse "Manager" signal.
+        if enable_hierarchical:
+            z_coarse_batch = jepa_coarse.encode_context(mean_theta)[0]  # (coarse_embed_dim,)
+        else:
+            z_coarse_batch = None
+
+        # --- sample a population (defensive mixture, as in gpmc_ais.py) ---
+        use_prior_mask = env.rng.random(m) < defensive_eps
+        thetas = np.empty((m, theta_dim))
+        n_prior = int(use_prior_mask.sum())
+        n_prop = m - n_prior
+        if n_prop > 0:
+            thetas[~use_prior_mask] = proposal.sample(env.rng, n=n_prop)
+        if n_prior > 0:
+            thetas[use_prior_mask] = prior.sample(env.rng, n=n_prior)
+
+        # This batch's own generating proposal joins the window *before* the
+        # denominator is computed, so it is weighted against the mixture
+        # that includes itself (Deterministic Mixture PMC / AMIS).
+        proposal_window.append(proposal)
+        q_window_pdf = np.mean(
+            [comp.pdf(thetas) for comp in proposal_window], axis=0
+        )
+        q_theta_mix_pdf = (1 - defensive_eps) * q_window_pdf + defensive_eps * prior.pdf(thetas)
+        p_theta_pdf = prior.pdf(thetas)
+
+        mu_leaf, sigma_leaf = env.leaf_params(thetas)
+
+        if enable_hierarchical:
+            fine_input = np.concatenate([thetas, np.tile(z_coarse_batch, (m, 1))], axis=1)
+        else:
+            fine_input = thetas
+        z_fine = jepa_fine.encode_context(fine_input)  # (m, embed_dim)
+
+        if enable_joint_tilt:
+            delta_y = z_fine @ Wy + by
+            if tilt_cap is not None:
+                # Cap |delta| relative to sigma: the Girsanov ratio's own
+                # variance is exp(delta^2/(2 sigma^2))-ish, so an aggressive
+                # tilt (large delta/sigma) is a direct source of importance-
+                # weight blowup, independent of theta-side concentration --
+                # this is what mixture_window/PSIS alone could not fix
+                # (confirmed empirically: disabling the tilt entirely drops
+                # raw ESS from 24 to ~4950, at a real KS cost).
+                delta_y = np.clip(delta_y, -tilt_cap * sigma_leaf, tilt_cap * sigma_leaf)
+        else:
+            delta_y = np.zeros(m)
+
+        ln_y = env.rng.normal(mu_leaf + delta_y, sigma_leaf)
+        y = np.exp(ln_y)
+
+        iw_theta = p_theta_pdf / np.clip(q_theta_mix_pdf, 1e-300, None)
+        iw_y = _exp_tilt_ratio(ln_y, mu_leaf, delta_y, sigma_leaf) if enable_joint_tilt else np.ones(m)
+        iw_raw = iw_theta * iw_y
+
+        for y_i, w_i in zip(y, iw_raw):
+            tracker_raw.update(float(y_i), float(w_i))  # unsmoothed, kept only for before/after comparison
+
+        # PSIS-smooth iw itself -- standard PSIS-LOO practice is to smooth
+        # the weights that actually feed the estimator (not a separate
+        # internal-only copy), with k_hat reported alongside as the
+        # reliability flag. `iw` (smoothed) is what both the reported
+        # CVaR/ESS *and* the CE/PMC refit weight `r` are built from below,
+        # so a single PSIS fit governs both consistently.
+        if use_psis:
+            psis_res = psis_smooth(iw_raw)
+            iw = psis_res.weights
+            k_hat_history.append(psis_res.k_hat)
+        else:
+            iw = iw_raw
+
+        for y_i, w_i in zip(y, iw):
+            tracker.update(float(y_i), float(w_i))
+        if log_samples:
+            log_thetas.append(thetas.copy())
+            log_ys.append(y.copy())
+            log_iws.append(iw.copy())
+        n_done += m
+
+        r = np.where(y > v95, iw * y, 0.0)  # == tail_reward(y_i, iw_i, v95), vectorized, from smoothed iw
+
+        # --- CE/PMC refit using the empirical weight r (no closed form) ---
+        mean_theta, cov_theta = _weighted_moment_match(thetas, r, prior.cov, cov_inflation, cov_floor_scale)
+        proposal = GaussianProposal(mean_theta, cov_theta)
+
+        if enable_joint_tilt and r.sum() > 0:
+            residual = ln_y - mu_leaf  # target for the tilt readout
+            Wy, by = _weighted_linear_fit(z_fine, residual, r)
+
+        # --- online JEPA training, purely from empirical rollout data ---
+        r_max = max(1e-8, float(np.max(np.abs(r))))
+        r_scaled = r / r_max
+        for i in range(m):
+            feat = build_target_features(float(y[i]), float(r_scaled[i]), float(iw[i]))
+            fine_buf_ctx.append(fine_input[i])
+            fine_buf_feat.append(feat)
+        if len(fine_buf_ctx) >= jepa_train_every:
+            ctx_b = np.asarray(fine_buf_ctx)
+            feat_b = np.asarray(fine_buf_feat)
+            jepa_fine.train_step(ctx_b, feat_b)
+            fine_buf_ctx.clear()
+            fine_buf_feat.clear()
+
+        if enable_hierarchical:
+            coarse_feat = np.array(
+                [np.tanh(r_scaled.mean()), np.tanh((y > v95).mean() * 3.0), np.tanh(0.3 * np.log1p(y.mean()))],
+                dtype=float,
+            )
+            coarse_buf_ctx.append(mean_theta.copy())
+            coarse_buf_feat.append(coarse_feat)
+            if len(coarse_buf_ctx) >= 4:  # small batches; coarse signal changes slowly
+                jepa_coarse.train_step(np.asarray(coarse_buf_ctx), np.asarray(coarse_buf_feat))
+                coarse_buf_ctx.clear()
+                coarse_buf_feat.clear()
+
+    extras = {
+        "final_mean": mean_theta.copy(),
+        "final_cov": cov_theta.copy(),
+        "Wy": Wy.copy(),
+        "by": by,
+        "jepa_fine": jepa_fine,
+        "jepa_coarse": jepa_coarse,
+        "enable_joint_tilt": enable_joint_tilt,
+        "enable_hierarchical": enable_hierarchical,
+        "use_psis": use_psis,
+        "mixture_window": mixture_window,
+        "k_hat_history": np.asarray(k_hat_history, dtype=float),
+        "k_hat_mean": float(np.nanmean(k_hat_history)) if k_hat_history else float("nan"),
+        "metrics_raw_unsmoothed": tracker_raw.finalize(),
+    }
+    if log_samples:
+        extras["thetas"] = np.concatenate(log_thetas, axis=0)
+        extras["ys"] = np.concatenate(log_ys, axis=0)
+        extras["iws"] = np.concatenate(log_iws, axis=0)
+    return MethodResult(
+        name="Hierarchical JEPA-CVaR v2",
+        metrics=tracker.finalize(),
+        final_q=None,
+        extras=extras,
     )

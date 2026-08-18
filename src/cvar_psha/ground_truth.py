@@ -15,11 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from cvar_psha.disaggregation import (
-    cvar_disaggregation_weights,
-    disaggregation_weights,
-    exact_var_cvar,
-)
+from cvar_psha.core.disaggregation import closed_form_targets
 from cvar_psha.env import LogicTreeEnv
 
 
@@ -47,9 +43,9 @@ def compute_ground_truth(
     """Exact VaR_alpha, CVaR_alpha, q_star, q_disagg under the epistemic
     prior mixture (closed-form; `n` is unused, kept for API compatibility).
     """
-    v, cvar = exact_var_cvar(percentile, env.weights, env.mus, env.sigmas)
-    q_star = cvar_disaggregation_weights(env.weights, env.mus, env.sigmas, v)
-    q_disagg = disaggregation_weights(env.weights, env.mus, env.sigmas, v)
+    v, cvar, q_star, q_disagg = closed_form_targets(
+        env.weights, env.mus, env.sigmas, percentile
+    )
 
     return GroundTruth(
         v95=v,

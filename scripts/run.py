@@ -12,7 +12,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from cvar_psha.run_experiment import main
+from cvar_psha.experiment.cli import main
 
 if __name__ == "__main__":
     main()

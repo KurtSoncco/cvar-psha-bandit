@@ -1,15 +1,5 @@
-"""Shared run-result container for sampling methods."""
+"""Sampling methods. ``MethodResult`` lives in ``cvar_psha.core.result``."""
 
-from __future__ import annotations
+from cvar_psha.core.result import MethodResult
 
-from dataclasses import dataclass, field
-
-import numpy as np
-
-
-@dataclass
-class MethodResult:
-    name: str
-    metrics: dict[str, np.ndarray]
-    final_q: np.ndarray | None = None
-    extras: dict = field(default_factory=dict)
+__all__ = ["MethodResult"]

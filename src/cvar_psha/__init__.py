@@ -1,5 +1,10 @@
 """CVaR policy learning for PSHA logic-tree Importance Sampling."""
 
-from cvar_psha.run_experiment import main
+
+def main(argv: list[str] | None = None) -> None:
+    from cvar_psha.experiment.cli import main as _main
+
+    _main(argv)
+
 
 __all__ = ["main"]

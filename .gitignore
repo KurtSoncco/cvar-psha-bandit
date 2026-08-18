@@ -10,7 +10,9 @@ build/
 .mypy_cache/
 .ruff_cache/
 .DS_Store
-results/
+results/**
+!results/**/
+!results/**/*.md
 *.png
 *.pdf
 .ipynb_checkpoints/

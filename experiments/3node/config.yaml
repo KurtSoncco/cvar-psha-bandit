@@ -1,0 +1,84 @@
+# Canonical copy of the 3-node logic-tree experiment.
+# Also available at experiments/config_3node.yaml for older commands.
+
+seed: 42
+
+nodes:
+  - name: source
+    branches:
+      - name: softer
+        weight: 0.5
+        delta_mu: -0.3
+      - name: harder
+        weight: 0.5
+        delta_mu: 0.3
+  - name: magnitude
+    branches:
+      - name: low
+        weight: 0.6
+        delta_mu: -0.2
+      - name: high
+        weight: 0.4
+        delta_mu: 0.2
+  - name: gmm
+    branches:
+      - name: optimistic
+        weight: 0.4
+        mu: -2.0
+        sigma: 0.6
+      - name: average
+        weight: 0.4
+        mu: -1.0
+        sigma: 0.6
+      - name: pessimistic
+        weight: 0.2
+        mu: 0.0
+        sigma: 0.6
+
+percentile: 0.95
+ground_truth_n: 1000000
+
+budget: 20000
+eval_every: 200
+n_replications: 5
+
+cem:
+  batch_size: 500
+  elite_frac: 0.05
+  smoothing: 0.7
+
+exp3:
+  gamma: 0.05
+
+reinforce:
+  learning_rate: 0.05
+  baseline_alpha: 0.1
+
+hierarchical:
+  learning_rate: 0.05
+  baseline_alpha: 0.1
+
+cvar_cpo:
+  learning_rate: 0.05
+  dual_lr: 0.05
+  kl_coef: 0.1
+  cvar_tol: 0.15
+  target_ema: 0.05
+
+# Pavirani et al. (2026) arXiv:2608.09335: control-oriented scenario-tree
+# construction. Sequential PPO assignment of a sampled fan onto the 12
+# complete paths (fixed topology). Never given P(Y>v|path).
+sto_assign:
+  fan_size: 128
+  group_size: 8
+  smoothing: 0.35
+  defensive_eps: 0.1
+  identity_bias: 0.0  # 0 = auto (~99% identity at init)
+  hidden: 32
+  ppo_lr: 0.03
+  ppo_clip: 0.2
+  ppo_epochs: 4
+  entropy_coef: 0.02
+  kl_stop: 0.05
+
+output_dir: results/3node

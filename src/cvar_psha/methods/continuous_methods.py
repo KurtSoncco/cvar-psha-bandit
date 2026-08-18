@@ -5,8 +5,9 @@ from __future__ import annotations
 import numpy as np
 
 from cvar_psha.continuous_env import ContinuousEpistemicEnv, GaussianProposal
-from cvar_psha.estimators import OnlineCVaRTracker
-from cvar_psha.methods import MethodResult
+from cvar_psha.core.estimators import OnlineCVaRTracker
+from cvar_psha.core.gaussian import weighted_gaussian_moments
+from cvar_psha.core.result import MethodResult
 
 
 def run_continuous_mc(
@@ -55,7 +56,7 @@ def grid_moment_match(nodes: np.ndarray, mass: np.ndarray, inflation: float = 1.
     """Fit a Gaussian to a categorical (grid-node, mass) distribution by
     moment matching -- used to turn q_disagg's grid representation into a
     sampleable proposal for the oracle baseline."""
-    mean = (nodes * mass[:, None]).sum(axis=0)
-    diff = nodes - mean[None, :]
-    cov = (mass[:, None, None] * (diff[:, :, None] * diff[:, None, :])).sum(axis=0)
-    return GaussianProposal(mean, cov * inflation)
+    moments = weighted_gaussian_moments(nodes, mass, cov_inflation=inflation)
+    if moments is None:
+        raise ValueError("grid_moment_match received zero mass")
+    return GaussianProposal(*moments)

@@ -204,7 +204,10 @@ def panel_spatial(summary: dict, out: Path) -> None:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    panel_1node(_load(ROOT / "results" / "summary.json"), OUT)
+    one_node = ROOT / "results" / "1node" / "summary.json"
+    if not one_node.exists():
+        one_node = ROOT / "results" / "summary.json"
+    panel_1node(_load(one_node), OUT)
     panel_3node(_load(ROOT / "results" / "3node" / "summary.json"), OUT)
     panel_continuous(_load(ROOT / "results" / "continuous" / "summary.json"), OUT)
     panel_spatial(_load(ROOT / "results" / "spatial" / "summary.json"), OUT)

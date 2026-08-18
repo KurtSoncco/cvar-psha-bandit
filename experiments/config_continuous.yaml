@@ -1,3 +1,4 @@
+# Legacy path. Canonical config: experiments/continuous/config.yaml
 # Continuous-epistemic-space experiment (paper 2 style): median-GMPE and
 # aleatory-sigma epistemic uncertainty as a continuous Gaussian prior over
 # theta = (theta_mu, theta_sigma), instead of discrete logic-tree branches.
@@ -33,3 +34,46 @@ jepa_cvar:
   std_start: 0.9
   std_end: 0.35
   jepa_train_every: 16
+  # v2 (run_jepa_cvar_v2): CE/PMC empirical-weight refit + joint tilt + hierarchical JEPA
+  v2_batch_size: 300
+  v2_smoothing: 0.5
+  v2_cov_inflation: 1.15
+  v2_defensive_eps: 0.1
+  v2_joint_tilt: true
+  v2_hierarchical: true
+  v2_use_psis: true  # Pareto-smooth iw before it drives the refit/reported estimator; see psis.py
+  v2_mixture_window: 6  # deterministic-mixture PMC/AMIS window (bounded history), see jepa_cvar.py
+  v2_tilt_cap: 1.0  # cap |delta(theta)| at this multiple of sigma(theta); the dominant ESS-collapse fix found
+
+# Wang, Kim, Hoxha, Fainekos & Panagou (2026) arXiv:2605.21257: RL actor
+# jointly learns proposal mean, risk level beta, and margin Delta; a
+# closed-form Gaussian CVaR-BF chance-constraint QP projects the mean
+# onto P(Y>v | theta=mu) >= 1-beta. Filter uses the lognormal leaf
+# (same privilege family as G-PMC); actor is trained on tail_reward only.
+cvar_bf:
+  learning_rate: 0.05
+  beta_lr: 0.03
+  delta_lr: 0.03
+  std_start: 0.9
+  std_end: 0.35
+  beta_init: 0.95  # so 1-beta starts at the 5% tail mass
+  beta_min: 0.50
+  beta_max: 0.99
+  delta_max: 0.5
+  defensive_eps: 0.1
+
+# Moghimi & Ku (ICML 2025) arXiv:2501.02087 / OpenReview WeMpvGxXMn:
+# quantile-regression SRM. Outer step updates a quantile grid of Y by
+# IS-weighted pinball; inner step is CE/PMC toward (y-q)_+ mixed across
+# several upper-CVaR levels (Kusuoka / paper "beyond CVaR"). Mean-CVaR
+# with a large lambda_mean leaves too much body mass for rare-event IS.
+# Never given P(Y>v|theta).
+qr_srm:
+  batch_size: 300
+  smoothing: 0.5
+  cov_inflation: 1.15
+  defensive_eps: 0.1
+  n_quantiles: 32
+  spectrum: srm_mix  # srm_mix | mean_cvar | cvar
+  lambda_mean: 0.10  # only used when spectrum=mean_cvar
+  qr_lr: 0.08

@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cvar-psha = "cvar_psha.run_experiment:main"
+cvar-psha = "cvar_psha.experiment.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

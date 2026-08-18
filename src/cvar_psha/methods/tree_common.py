@@ -2,32 +2,17 @@
 
 from __future__ import annotations
 
-import numpy as np
-
+from cvar_psha.core.policy import softmax
 from cvar_psha.tree_env import TreeLogicEnv
 
-
-def softmax(logits: np.ndarray) -> np.ndarray:
-    z = logits - np.max(logits)
-    e = np.exp(z)
-    return e / e.sum()
+__all__ = ["softmax", "sample_path_from_flat_q", "prior_rollout"]
 
 
-def sample_path_from_flat_q(
-    env: TreeLogicEnv,
-    q: np.ndarray,
-) -> tuple[tuple[int, ...], float, float]:
-    """Sample a full path from categorical q over paths; return path, y, IW."""
-    q = np.asarray(q, dtype=float)
-    q = q / q.sum()
-    idx = int(env.rng.choice(env.n_paths, p=q))
-    path = env.paths[idx]
-    y = env.sample_y(path)
-    iw = env.path_priors[idx] / max(q[idx], 1e-12)
-    return path, y, iw
+def sample_path_from_flat_q(env: TreeLogicEnv, q):
+    return env.sample_path_from_flat_q(q)
 
 
-def prior_rollout(env: TreeLogicEnv) -> tuple[tuple[int, ...], float, float]:
+def prior_rollout(env: TreeLogicEnv):
     """Sample path under epistemic priors (IW = 1)."""
 
     def action_fn(state, prior):

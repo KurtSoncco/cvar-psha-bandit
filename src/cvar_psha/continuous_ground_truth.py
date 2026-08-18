@@ -23,11 +23,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from cvar_psha.continuous_env import ContinuousEpistemicEnv, GaussianProposal
-from cvar_psha.disaggregation import (
-    cvar_disaggregation_weights,
-    disaggregation_weights,
-    exact_var_cvar,
-)
+from cvar_psha.core.disaggregation import closed_form_targets
 
 
 def quadrature_grid(
@@ -75,9 +71,7 @@ def compute_continuous_ground_truth(
     nodes, weights = quadrature_grid(env.spec.tau_mu, env.spec.tau_sigma, deg=deg)
     mus, sigmas = env.leaf_params(nodes)
 
-    v, cvar = exact_var_cvar(percentile, weights, mus, sigmas)
-    q_star = cvar_disaggregation_weights(weights, mus, sigmas, v)
-    q_disagg = disaggregation_weights(weights, mus, sigmas, v)
+    v, cvar, q_star, q_disagg = closed_form_targets(weights, mus, sigmas, percentile)
 
     return ContinuousGroundTruth(
         v95=v,

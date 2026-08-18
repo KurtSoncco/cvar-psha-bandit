@@ -33,4 +33,20 @@ reinforce:
   learning_rate: 0.05
   baseline_alpha: 0.1
 
+# Pavirani et al. (2026) arXiv:2608.09335: control-oriented scenario-tree
+# construction. Sequential PPO assignment of a sampled fan onto the K GMM
+# arms (fixed topology). Never given P(Y>v|arm).
+sto_assign:
+  fan_size: 128
+  group_size: 8
+  smoothing: 0.35
+  defensive_eps: 0.1
+  identity_bias: 0.0  # 0 = auto (~99% identity at init)
+  hidden: 32
+  ppo_lr: 0.03
+  ppo_clip: 0.2
+  ppo_epochs: 4
+  entropy_coef: 0.02
+  kl_stop: 0.05
+
 output_dir: results

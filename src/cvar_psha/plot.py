@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -48,10 +51,22 @@ def plot_analysis_comparisons(
         "G-PMC AIS (CVaR)": "#8e44ad",
         "Hierarchical JEPA-CVaR": "#e08283",
         "Hierarchical JEPA-CVaR v2": "#c0392b",
+        "CVaR-BF AIS": "#0e7c7b",
+        "QR-SRM AIS": "#e67e22",
+        "CO-STC": "#2c6fbb",
     }
 
     # Emphasize Hierarchical vs baselines.
-    highlight = {"Hierarchical", "q* oracle", "Naive MC", "Hierarchical JEPA-CVaR v2", "G-PMC AIS"}
+    highlight = {
+        "Hierarchical",
+        "q* oracle",
+        "Naive MC",
+        "Hierarchical JEPA-CVaR v2",
+        "G-PMC AIS",
+        "CVaR-BF AIS",
+        "QR-SRM AIS",
+        "CO-STC",
+    }
 
     # --- Plot 1: CVaR convergence ---
     fig1, ax1 = plt.subplots(figsize=(8.5, 5.0), constrained_layout=True)
@@ -289,6 +304,8 @@ def plot_continuous_theta_comparison(
         "G-PMC AIS": "#8e44ad",
         "Hierarchical JEPA-CVaR": "#e08283",
         "Hierarchical JEPA-CVaR v2": "#c0392b",
+        "CVaR-BF AIS": "#0e7c7b",
+        "QR-SRM AIS": "#e67e22",
     }
     markers = {
         "Naive MC": "o",
@@ -296,6 +313,8 @@ def plot_continuous_theta_comparison(
         "G-PMC AIS": "s",
         "Hierarchical JEPA-CVaR": "^",
         "Hierarchical JEPA-CVaR v2": "D",
+        "CVaR-BF AIS": "P",
+        "QR-SRM AIS": "X",
     }
     for name, mean in method_means.items():
         ax.scatter(

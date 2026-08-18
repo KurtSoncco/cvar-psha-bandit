@@ -16,6 +16,9 @@ from cvar_psha.ground_truth import compute_ground_truth
 from cvar_psha.methods.cem import run_cem
 from cvar_psha.methods.gpmc_ais import run_gpmc_ais
 from cvar_psha.methods.jepa_cvar import run_jepa_cvar, run_jepa_cvar_v2
+from cvar_psha.methods.cvar_bf import run_cvar_bf_ais
+from cvar_psha.methods.qr_srm import run_qr_srm_ais
+from cvar_psha.methods.sto_assign import run_sto_assign, run_tree_sto_assign
 from cvar_psha.methods.cvar_cpo import run_cvar_cpo
 from cvar_psha.methods.exp3 import run_exp3
 from cvar_psha.methods.hierarchical import run_hierarchical
@@ -130,6 +133,7 @@ def run_1node(cfg: dict, config_path: Path | None = None) -> dict:
     cem_cfg = cfg.get("cem", {})
     exp3_cfg = cfg.get("exp3", {})
     rf_cfg = cfg.get("reinforce", {})
+    sto_cfg = cfg.get("sto_assign", {})
 
     method_runs: dict[str, list] = {
         "Naive MC": [],
@@ -138,6 +142,7 @@ def run_1node(cfg: dict, config_path: Path | None = None) -> dict:
         "CEM-IS": [],
         "Exp3": [],
         "REINFORCE": [],
+        "CO-STC": [],
     }
 
     for rep in range(n_reps):
@@ -195,9 +200,33 @@ def run_1node(cfg: dict, config_path: Path | None = None) -> dict:
             )
         )
 
+        env = LogicTreeEnv(arms=arms, rng=np.random.default_rng(rep_seed + 4))
+        method_runs["CO-STC"].append(
+            run_sto_assign(
+                env,
+                gt.v95,
+                budget,
+                fan_size=int(sto_cfg.get("fan_size", 128)),
+                group_size=int(sto_cfg.get("group_size", 8)),
+                smoothing=float(sto_cfg.get("smoothing", 0.35)),
+                defensive_eps=float(sto_cfg.get("defensive_eps", 0.1)),
+                identity_bias=float(sto_cfg.get("identity_bias", 0.0)),
+                hidden=int(sto_cfg.get("hidden", 32)),
+                ppo_lr=float(sto_cfg.get("ppo_lr", 0.03)),
+                ppo_clip=float(sto_cfg.get("ppo_clip", 0.2)),
+                ppo_epochs=int(sto_cfg.get("ppo_epochs", 4)),
+                entropy_coef=float(sto_cfg.get("entropy_coef", 0.02)),
+                kl_stop=float(sto_cfg.get("kl_stop", 0.05)),
+                eval_every=eval_every,
+            )
+        )
+
     out_dir = _resolve_out_dir(cfg, config_path)
     fig_path = plot_learning_curves(method_runs, gt.cvar, out_dir, q_star=gt.q_star)
     print(f"\nSaved learning curves to {fig_path}")
+    cvar_path, ess_path = plot_analysis_comparisons(method_runs, gt.cvar, out_dir)
+    print(f"Saved analysis plot: {cvar_path}")
+    print(f"Saved analysis plot: {ess_path}")
 
     summary = {
         "mode": "1node",
@@ -254,6 +283,7 @@ def run_3node(cfg: dict, config_path: Path | None = None) -> dict:
     rf_cfg = cfg.get("reinforce", {})
     hier_cfg = cfg.get("hierarchical", {})
     cpo_cfg = cfg.get("cvar_cpo", {})
+    sto_cfg = cfg.get("sto_assign", {})
 
     method_runs: dict[str, list] = {
         "Naive MC": [],
@@ -264,6 +294,7 @@ def run_3node(cfg: dict, config_path: Path | None = None) -> dict:
         "Flat REINFORCE": [],
         "Hierarchical": [],
         "CVaR-CPO": [],
+        "CO-STC": [],
     }
 
     for rep in range(n_reps):
@@ -348,6 +379,27 @@ def run_3node(cfg: dict, config_path: Path | None = None) -> dict:
                 target_ema=float(cpo_cfg.get("target_ema", 0.05)),
                 eval_every=eval_every,
                 true_cvar=gt.cvar,
+            )
+        )
+
+        env = TreeLogicEnv(nodes=nodes, rng=np.random.default_rng(rep_seed + 6))
+        method_runs["CO-STC"].append(
+            run_tree_sto_assign(
+                env,
+                gt.v95,
+                budget,
+                fan_size=int(sto_cfg.get("fan_size", 128)),
+                group_size=int(sto_cfg.get("group_size", 8)),
+                smoothing=float(sto_cfg.get("smoothing", 0.35)),
+                defensive_eps=float(sto_cfg.get("defensive_eps", 0.1)),
+                identity_bias=float(sto_cfg.get("identity_bias", 0.0)),
+                hidden=int(sto_cfg.get("hidden", 32)),
+                ppo_lr=float(sto_cfg.get("ppo_lr", 0.03)),
+                ppo_clip=float(sto_cfg.get("ppo_clip", 0.2)),
+                ppo_epochs=int(sto_cfg.get("ppo_epochs", 4)),
+                entropy_coef=float(sto_cfg.get("entropy_coef", 0.02)),
+                kl_stop=float(sto_cfg.get("kl_stop", 0.05)),
+                eval_every=eval_every,
             )
         )
 
@@ -641,8 +693,9 @@ def continuous_env_from_config(cfg: dict, rng: np.random.Generator) -> Continuou
 def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
     """Continuous-epistemic-space experiment (paper 2 style): compare
     Naive MC, the closed-form Disagg-IS oracle, G-PMC AIS (given the
-    closed-form conditional hazard), and Hierarchical JEPA-CVaR (scalar
-    reward only) against the exact quadrature ground truth."""
+    closed-form conditional hazard), Hierarchical JEPA-CVaR (scalar
+    reward only), CVaR-BF AIS, and QR-SRM AIS against the exact
+    quadrature ground truth."""
     from cvar_psha.methods.continuous_methods import (
         grid_moment_match,
         run_continuous_mc,
@@ -672,6 +725,8 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
     n_reps = int(cfg.get("n_replications", 5))
     gpmc_cfg = cfg.get("gpmc_ais", {})
     jepa_cfg = cfg.get("jepa_cvar", {})
+    cvar_bf_cfg = cfg.get("cvar_bf", {})
+    qr_srm_cfg = cfg.get("qr_srm", {})
 
     method_runs: dict[str, list] = {
         "Naive MC": [],
@@ -679,6 +734,8 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
         "G-PMC AIS": [],
         "Hierarchical JEPA-CVaR": [],
         "Hierarchical JEPA-CVaR v2": [],
+        "CVaR-BF AIS": [],
+        "QR-SRM AIS": [],
     }
 
     for rep in range(n_reps):
@@ -745,6 +802,48 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
             )
         )
 
+        env = continuous_env_from_config(cfg, np.random.default_rng(rep_seed + 4))
+        method_runs["CVaR-BF AIS"].append(
+            run_cvar_bf_ais(
+                env,
+                gt.v95,
+                budget,
+                learning_rate=float(cvar_bf_cfg.get("learning_rate", 0.05)),
+                beta_lr=float(cvar_bf_cfg.get("beta_lr", 0.03)),
+                delta_lr=float(cvar_bf_cfg.get("delta_lr", 0.03)),
+                std_start=float(cvar_bf_cfg.get("std_start", 0.9)),
+                std_end=float(cvar_bf_cfg.get("std_end", 0.35)),
+                beta_init=(
+                    float(cvar_bf_cfg["beta_init"]) if cvar_bf_cfg.get("beta_init") is not None else None
+                ),
+                beta_min=float(cvar_bf_cfg.get("beta_min", 0.50)),
+                beta_max=float(cvar_bf_cfg.get("beta_max", 0.99)),
+                delta_max=float(cvar_bf_cfg.get("delta_max", 0.5)),
+                defensive_eps=float(cvar_bf_cfg.get("defensive_eps", 0.1)),
+                eval_every=eval_every,
+            )
+        )
+
+        env = continuous_env_from_config(cfg, np.random.default_rng(rep_seed + 5))
+        tail_alpha = 1.0 - float(cfg.get("percentile", 0.95))
+        method_runs["QR-SRM AIS"].append(
+            run_qr_srm_ais(
+                env,
+                gt.v95,
+                budget,
+                batch_size=int(qr_srm_cfg.get("batch_size", 300)),
+                smoothing=float(qr_srm_cfg.get("smoothing", 0.5)),
+                cov_inflation=float(qr_srm_cfg.get("cov_inflation", 1.15)),
+                defensive_eps=float(qr_srm_cfg.get("defensive_eps", 0.1)),
+                n_quantiles=int(qr_srm_cfg.get("n_quantiles", 32)),
+                spectrum=str(qr_srm_cfg.get("spectrum", "srm_mix")),
+                lambda_mean=float(qr_srm_cfg.get("lambda_mean", 0.10)),
+                alpha=float(qr_srm_cfg.get("alpha", tail_alpha)),
+                qr_lr=float(qr_srm_cfg.get("qr_lr", 0.08)),
+                eval_every=eval_every,
+            )
+        )
+
     out_dir = _resolve_out_dir(cfg, config_path)
     cvar_path, ess_path = plot_analysis_comparisons(method_runs, gt.cvar, out_dir)
     print(f"\nSaved analysis plot: {cvar_path}")
@@ -792,8 +891,25 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
                 "ks": ks_statistic(mass, target),
             }
         summary["distance_to_targets"][name] = d
+        extra_note = ""
+        if name == "CVaR-BF AIS":
+            beta_m = float(np.mean([r.extras["final_beta"] for r in runs]))
+            delta_m = float(np.mean([r.extras["final_delta"] for r in runs]))
+            act_m = float(np.mean([r.extras["frac_qp_active"] for r in runs]))
+            summary["cvar_bf"] = {
+                "final_beta": beta_m,
+                "final_delta": delta_m,
+                "frac_qp_active": act_m,
+            }
+            extra_note = f"  beta={beta_m:.3f}  delta={delta_m:.3f}  qp_active={act_m:.2f}"
+        if name == "QR-SRM AIS":
+            srm_m = float(np.nanmean([r.extras.get("final_srm", np.nan) for r in runs]))
+            lam_m = float(np.mean([r.extras.get("lambda_mean", np.nan) for r in runs]))
+            spec_m = str(runs[0].extras.get("spectrum", "srm_mix"))
+            summary["qr_srm"] = {"final_srm": srm_m, "lambda_mean": lam_m, "spectrum": spec_m}
+            extra_note = f"  srm={srm_m:.3f}  spectrum={spec_m}"
         print(
-            f"  {name:22s}  CVaR~{last_cvar:.4f}  ESS~{last_ess:.1f}  theta_mean={mean}\n"
+            f"  {name:22s}  CVaR~{last_cvar:.4f}  ESS~{last_ess:.1f}  theta_mean={mean}{extra_note}\n"
             f"  {'':22s}  vs q_star: KL={d['q_star']['kl']:.3f} TV={d['q_star']['tv']:.3f} KS={d['q_star']['ks']:.3f}"
             f"  |  vs q_disagg: KL={d['q_disagg']['kl']:.3f} TV={d['q_disagg']['tv']:.3f} KS={d['q_disagg']['ks']:.3f}"
         )

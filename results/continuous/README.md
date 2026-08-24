@@ -1,5 +1,7 @@
 # Continuous-epistemic results
 
+The continuous environment is the Houng et al. (2025) four-parameter model; numbers below are from the previous two-parameter setup and will change after a fresh `python scripts/run.py --config continuous`.
+
 From `python scripts/run.py --config continuous` (budget 20k). Hierarchical JEPA-CVaR v2 defaults are PSIS + `mixture_window=6` + `tilt_cap=1.0`. G-PMC AIS is given the closed-form hazard; JEPA and QR-SRM are not.
 
 **Current defaults vs references** (v2 as shipped):
@@ -24,4 +26,4 @@ From `python scripts/run.py --config continuous` (budget 20k). Hierarchical JEPA
 
 v2 has the best CVaR RMSE among learned methods and a trustworthy PSIS `k_hat` once the y-tilt is capped; G-PMC still wins density match (KS) and raw ESS. CVaR-BF has the highest adaptive ESS in the 5-rep table. QR-SRM matches G-PMC ESS with no closed-form leaf.
 
-Expected files: `cvar_convergence.png`, `ess_comparison.png`, `continuous_theta_comparison.png`, `summary.json`.
+Expected files: `hazard_curves.png`, `cvar_convergence.png`, `ess_comparison.png`, `continuous_theta_marginals.png`, `summary.json`.

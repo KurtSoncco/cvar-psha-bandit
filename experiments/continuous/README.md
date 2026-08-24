@@ -1,9 +1,10 @@
-# Continuous epistemic space
+# Continuous epistemic PSHA (Houng et al. 2025)
 
-Median-GMPE offset and aleatory-sigma scaling as `θ = (θ_μ, θ_σ)` with a bivariate Gaussian prior (`continuous_env.py`). Ground truth is Gauss-Hermite quadrature.
+Four continuous epistemic variables: Gutenberg–Richter **b-value** and **m_max**, plus GMM offsets **Δμ** and **Δσ**. Aleatory uncertainty integrates truncated GR magnitudes and a Sadigh et al. (1997) rock GMPE at R = 35 km. The CVaR threshold is the PGA at a target annual exceedance rate (default 10⁻⁴ /yr).
 
 ```powershell
 python scripts/run.py --config continuous
+python scripts/plot_hazard_curve.py --config continuous
 ```
 
 Config: [`config.yaml`](config.yaml).

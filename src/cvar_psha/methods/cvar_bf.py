@@ -64,7 +64,7 @@ from __future__ import annotations
 import numpy as np
 from scipy import stats
 
-from cvar_psha.continuous_env import ContinuousEpistemicEnv
+from cvar_psha.continuous_env import ContinuousEpistemicEnv, sadigh_ln_pga_median
 from cvar_psha.estimators import OnlineCVaRTracker, importance_weight, tail_reward
 from cvar_psha.methods import MethodResult
 
@@ -112,10 +112,11 @@ def _project_chance_qp(
     beta = float(np.clip(beta, 1e-12, 1.0 - 1e-12))
     z = float(stats.norm.ppf(1.0 - beta))
     floor = float(np.log(v95) - spec_mu0 + sigma_leaf * z + delta)
+    axis = 2 if mu_nom.size > 2 else 0
     mu_star = mu_nom.copy()
-    active = mu_star[0] < floor
+    active = mu_star[axis] < floor
     if active:
-        mu_star[0] = floor
+        mu_star[axis] = floor
     return mu_star, active, floor
 
 
@@ -147,11 +148,12 @@ def run_cvar_bf_ais(
     projection also flow into β and Δ (the filter is the applied policy).
     """
     tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
-    theta_dim = 2
+    theta_dim = env.theta_dim
     spec = env.spec
+    mu0_eff = float(sadigh_ln_pga_median(6.5, spec.distance_km))
     prior = env.prior
 
-    mu_nom = np.zeros(theta_dim)
+    mu_nom = env.spec.prior_means.copy()
     # β ∈ [beta_min, beta_max] via a sigmoid; default init so 1−β equals
     # the experiment tail mass P(Y > v95) ≈ 0.05 when percentile=0.95.
     if beta_init is None:
@@ -181,7 +183,7 @@ def run_cvar_bf_ais(
         mu_star, active, floor = _project_chance_qp(
             mu_nom,
             float(sigma_at_nom[0]),
-            spec.mu0,
+            mu0_eff,
             v95,
             beta,
             delta,
@@ -247,7 +249,7 @@ def run_cvar_bf_ais(
     n_tail = max(1, int(tail_avg_frac * budget))
     tail_avg_mean = mean_history_arr[-n_tail:].mean(axis=0)
     final_std = std_end
-    final_cov = np.diag([final_std * final_std, final_std * final_std])
+    final_cov = np.diag(np.full(theta_dim, final_std * final_std))
     final_beta = beta_min + span_b * _sigmoid(logit_beta)
     final_delta = delta_max * _sigmoid(logit_delta)
     mu_leaf_f, sig_leaf_f = env.leaf_params(tail_avg_mean[None, :])

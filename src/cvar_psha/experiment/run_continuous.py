@@ -24,25 +24,37 @@ from cvar_psha.methods.cvar_bf import run_cvar_bf_ais
 from cvar_psha.methods.gpmc_ais import run_gpmc_ais
 from cvar_psha.methods.jepa_cvar import run_jepa_cvar, run_jepa_cvar_v2
 from cvar_psha.methods.qr_srm import run_qr_srm_ais
-from cvar_psha.plot import plot_analysis_comparisons, plot_continuous_theta_comparison
+from cvar_psha.plot import (
+    plot_analysis_comparisons,
+    plot_continuous_theta_comparison,
+    plot_hazard_curves,
+)
 
 
 def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
     seed = int(cfg.get("seed", 42))
     env_gt = continuous_env_from_config(cfg, np.random.default_rng(seed))
 
-    print("Computing continuous-epistemic ground truth (Gauss-Hermite quadrature)...")
+    print("Computing Houng PSHA ground truth (product quadrature)...")
+    c = cfg.get("continuous", {})
     gt = compute_continuous_ground_truth(
         env_gt,
-        deg=int(cfg.get("quadrature_deg", 40)),
+        deg_trunc=int(c.get("quadrature_deg_trunc", 8)),
+        deg_normal=int(c.get("quadrature_deg_normal", 8)),
         percentile=float(cfg.get("percentile", 0.95)),
+        target_rate=float(cfg.get("target_rate", 1e-4)),
     )
     mean_disagg = (gt.nodes * gt.q_disagg[:, None]).sum(axis=0)
     mean_star = (gt.nodes * gt.q_star[:, None]).sum(axis=0)
-    print(f"  v95      = {gt.v95:.6f}")
-    print(f"  CVaR     = {gt.cvar:.6f}")
+    print(f"  target_rate = {gt.target_rate:.2e} /yr")
+    print(f"  v (PGA at target rate) = {gt.v95:.6f} g")
+    print(f"  CVaR (E[PGA | PGA > v]) = {gt.cvar:.6f} g")
     print(f"  E[theta | q_disagg] = {mean_disagg}  (Houng, Ceferino & Abrahamson 2025 target)")
     print(f"  E[theta | q_star]   = {mean_star}  (ours, CVaR-optimal)")
+
+    out_dir = resolve_out_dir(cfg, config_path)
+    hazard_path = plot_hazard_curves(gt.pga_grid, gt.hazard_curves, out_dir, v_threshold=gt.v95)
+    print(f"Saved hazard curves: {hazard_path}")
 
     oracle_proposal = grid_moment_match(gt.nodes, gt.q_disagg)
 
@@ -102,6 +114,7 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
                 std_start=float(jepa_cfg.get("std_start", 0.9)),
                 std_end=float(jepa_cfg.get("std_end", 0.35)),
                 jepa_train_every=int(jepa_cfg.get("jepa_train_every", 16)),
+                true_cvar=gt.cvar,
                 eval_every=eval_every,
                 seed=rep,
             )
@@ -177,6 +190,7 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
 
     summary = {
         "mode": "continuous",
+        "target_rate": gt.target_rate,
         "v95": gt.v95,
         "true_cvar": gt.cvar,
         "mean_theta_q_disagg": mean_disagg.tolist(),
@@ -196,7 +210,7 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
             if name == "Hierarchical JEPA-CVaR":
                 m = r.extras["tail_avg_mean"]
                 s = r.extras["final_std"]
-                c = np.diag([s * s, s * s])
+                c = np.diag(np.asarray(s, dtype=float) ** 2)
             else:
                 m = r.extras["proposal_mean"] if "proposal_mean" in r.extras else r.extras["final_mean"]
                 c = r.extras["proposal_cov"] if "proposal_cov" in r.extras else r.extras["final_cov"]
@@ -241,7 +255,9 @@ def run_continuous(cfg: dict, config_path: Path | None = None) -> dict:
         )
     print(f"  {'q_disagg':22s}  theta_mean={mean_disagg}")
 
-    heat_path = plot_continuous_theta_comparison(gt.nodes, gt.q_disagg, method_means, out_dir)
+    heat_path = plot_continuous_theta_comparison(
+        gt.nodes, gt.q_disagg, method_means, out_dir, theta_names=env_gt.theta_names
+    )
     print(f"Saved theta-space plot: {heat_path}")
 
     write_summary(summary, out_dir)

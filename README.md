@@ -56,9 +56,10 @@ Hazard-curve worked example (mean + fractile curves from one AIS run):
 
 ```powershell
 python scripts/hazard_curve_example.py
+python scripts/plot_hazard_curve.py --config continuous
 ```
 
-Writeup: [`results/hazard_curve_example/SUMMARY.md`](results/hazard_curve_example/SUMMARY.md).
+Writeup: [`results/hazard_curve_example/SUMMARY.md`](results/hazard_curve_example/SUMMARY.md). Ground-truth mean/fractile curves for the four-parameter model also go to `results/continuous/hazard_curves.png`.
 
 ## What each experiment is
 
@@ -66,7 +67,7 @@ Writeup: [`results/hazard_curve_example/SUMMARY.md`](results/hazard_curve_exampl
 |---|---|---|---|
 | 1-node | K GMM arms, one site | [`experiments/1node/`](experiments/1node/README.md) | [`results/1node/`](results/1node/README.md) |
 | 3-node | Source → Magnitude → GMM tree | [`experiments/3node/`](experiments/3node/README.md) | [`results/3node/`](results/3node/README.md) |
-| Continuous | `θ = (θ_μ, θ_σ)` Gaussian epistemic prior | [`experiments/continuous/`](experiments/continuous/README.md) | [`results/continuous/`](results/continuous/README.md) |
+| Continuous | Houng et al. 2025 four-parameter θ = (b, m_max, Δμ, Δσ) | [`experiments/continuous/`](experiments/continuous/README.md) | [`results/continuous/`](results/continuous/README.md) |
 | Spatial | 10-site portfolio, ~1920 paths | [`experiments/spatial/`](experiments/spatial/README.md) | [`results/spatial/`](results/spatial/README.md) |
 
 Every learning method sees only `tail_reward(y, w, v95) = w·y` if `y > v95`, else `0`. Closed-form `P(Y>v|·)` is given only to privileged baselines (oracles, G-PMC AIS, the CVaR-BF *filter*).
@@ -79,4 +80,4 @@ Every learning method sees only `tail_reward(y, w, v95) = w·y` if `y > v95`, el
 
 ## Ground truth
 
-For lognormal leaves, VaR, CVaR, `q_disagg`, and `q_star` are closed-form (1-D root-find for VaR) in `core/disaggregation.py`. The continuous environment reuses the same identities on a Gauss-Hermite quadrature grid. Spatial portfolio CVaR is estimated by large-N Monte Carlo (the leaf is a multi-site sum, not a single lognormal).
+For lognormal leaves, VaR, CVaR, `q_disagg`, and `q_star` are closed-form (1-D root-find for VaR) in `core/disaggregation.py`. The continuous Houng environment uses product quadrature over θ plus magnitude bins, and ties the CVaR threshold to a target annual exceedance rate rather than an event-PGA percentile. Spatial portfolio CVaR is estimated by large-N Monte Carlo (the leaf is a multi-site sum, not a single lognormal).

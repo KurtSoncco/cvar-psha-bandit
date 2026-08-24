@@ -27,8 +27,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from cvar_psha.continuous_env import ContinuousEpistemicEnv, ContinuousEpistemicSpec
-from cvar_psha.continuous_ground_truth import quadrature_grid
-from cvar_psha.disaggregation import solve_mixture_var
 from cvar_psha.hazard_curve import DEFAULT_FRACTILES, exact_hazard_curve, hazard_curve_from_samples
 from cvar_psha.methods.gpmc_ais import run_gpmc_ais
 from cvar_psha.methods.jepa_cvar import run_jepa_cvar_v2
@@ -47,38 +45,36 @@ PALETTE = {
 
 
 def build_logic_tree() -> ContinuousEpistemicEnv:
-    """The continuous PSHA logic tree for this example: median-GMPE
-    epistemic offset (theta_mu) and aleatory-sigma epistemic scaling
-    (theta_sigma) -- the two axes real logic trees most commonly branch on
-    for GMPE selection, here as a continuous relaxation (paper 2 style)
-    instead of a handful of discrete branches."""
-    spec = ContinuousEpistemicSpec(mu0=-1.0, sigma0=0.6, tau_mu=0.5, tau_sigma=0.35, s_max=0.5)
-    return ContinuousEpistemicEnv(spec=spec, rng=np.random.default_rng(SEED))
+    """Houng et al. (2025) four-parameter continuous epistemic tree."""
+    return ContinuousEpistemicEnv(spec=ContinuousEpistemicSpec(), rng=np.random.default_rng(SEED))
 
 
-def y_grid_from_percentiles(env: ContinuousEpistemicEnv, percentiles: list[float], deg: int = 40) -> np.ndarray:
-    nodes, weights = quadrature_grid(env.spec.tau_mu, env.spec.tau_sigma, deg=deg)
-    mus, sigmas = env.leaf_params(nodes)
-    return np.array([solve_mixture_var(p, weights, mus, sigmas) for p in percentiles])
+def y_grid_from_percentiles(env: ContinuousEpistemicEnv, percentiles: list[float], deg: int = 8) -> np.ndarray:
+    from cvar_psha.continuous_ground_truth import compute_continuous_ground_truth
+
+    gt = compute_continuous_ground_truth(env, deg_trunc=deg, deg_normal=deg, target_rate=1e-4)
+    return gt.pga_grid
 
 
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     env_gt = build_logic_tree()
 
-    print("Continuous logic tree: theta = (theta_mu, theta_sigma)")
-    print(f"  mu0={env_gt.spec.mu0} sigma0={env_gt.spec.sigma0} tau_mu={env_gt.spec.tau_mu} "
-          f"tau_sigma={env_gt.spec.tau_sigma} s_max={env_gt.spec.s_max}")
+    print("Continuous logic tree: theta = (b, m_max, dmu, dsigma)")
+    s = env_gt.spec
+    print(
+        f"  b={s.b_mean}±{s.b_std}  mmax={s.mmax_mean}±{s.mmax_std}  "
+        f"dmu_std={s.dmu_std}  dsigma_std={s.dsigma_std}  R={s.distance_km} km"
+    )
 
     y_grid = y_grid_from_percentiles(env_gt, PERCENTILES)
-    v_extreme = float(y_grid[-1])  # adapt both IS methods toward the rarest point
-    print(f"\ny_grid (at percentiles {PERCENTILES}):")
-    for p, y in zip(PERCENTILES, y_grid):
-        print(f"  P(Y<y)={p:.3f}  ->  y={y:.4f}")
-    print(f"Adapting both IS methods toward the rarest level: v_extreme={v_extreme:.4f}")
+    v_extreme = float(y_grid[-1])
+    print(f"\nPGA grid ({len(y_grid)} points from ground-truth hazard curve):")
+    print(f"  [{y_grid[0]:.4f}, ..., {y_grid[-1]:.4f}] g")
+    print(f"Adapting both IS methods toward the rarest grid level: v_extreme={v_extreme:.4f} g")
 
     print("\nComputing exact mean + fractile hazard curves (quadrature)...")
-    exact = exact_hazard_curve(env_gt, y_grid, deg=40)
+    exact = exact_hazard_curve(env_gt, y_grid)
 
     print(f"Running G-PMC AIS (continuous IS, given closed-form target), budget={BUDGET}...")
     env = ContinuousEpistemicEnv(spec=env_gt.spec, rng=np.random.default_rng(SEED + 1))

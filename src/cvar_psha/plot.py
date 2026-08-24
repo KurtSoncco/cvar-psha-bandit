@@ -279,16 +279,111 @@ def plot_final_policies(
     return policy_path
 
 
+def plot_hazard_curves(
+    pga_grid: np.ndarray,
+    hazard_curves: dict[str, np.ndarray],
+    output_dir: Path,
+    v_threshold: float | None = None,
+) -> Path:
+    """Log-log mean and fractile hazard curves (annual exceedance rate vs PGA)."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(8.5, 5.5), constrained_layout=True)
+    styles = {
+        "mean": ("-", "#1f1f1f", 2.2, "Mean hazard"),
+        "p16": ("--", "#6c8ebf", 1.6, "16th fractile"),
+        "p50": ("--", "#7a7a7a", 1.6, "50th fractile"),
+        "p84": ("--", "#c0392b", 1.6, "84th fractile"),
+    }
+    for key, (ls, color, lw, label) in styles.items():
+        if key not in hazard_curves:
+            continue
+        lam = np.clip(hazard_curves[key], 1e-12, None)
+        ax.loglog(pga_grid, lam, ls=ls, color=color, lw=lw, label=label)
+
+    if v_threshold is not None:
+        ax.axvline(v_threshold, color="#555555", ls=":", lw=1.4, label=f"Threshold v={v_threshold:.3g} g")
+
+    ax.set_xlabel("Peak ground acceleration PGA (g)")
+    ax.set_ylabel("Annual exceedance rate (1/yr)")
+    ax.set_title("PSHA hazard curves (Houng et al. 2025 four-parameter model)")
+    ax.grid(True, which="both", alpha=0.3)
+    ax.legend(fontsize=8, framealpha=0.95)
+    out = output_dir / "hazard_curves.png"
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+    return out
+
+
+def plot_continuous_theta_marginals(
+    nodes: np.ndarray,
+    q_disagg: np.ndarray,
+    method_means: dict[str, np.ndarray],
+    theta_names: tuple[str, ...],
+    output_dir: Path,
+) -> Path:
+    """Four 1-D marginal panels: q_disagg vs each method's Gaussian marginal mean."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    dim = nodes.shape[1]
+    fig, axes = plt.subplots(2, 2, figsize=(9.0, 7.0), constrained_layout=True)
+    axes = axes.ravel()
+
+    palette = {
+        "Naive MC": "#7a7a7a",
+        "Disagg-IS oracle": "#1f1f1f",
+        "G-PMC AIS": "#8e44ad",
+        "Hierarchical JEPA-CVaR": "#c0392b",
+    }
+    labels = {
+        "b": r"$b$-value",
+        "m_max": r"$m_{\max}$",
+        "dmu": r"$\Delta\mu$ (ln median GMM)",
+        "dsigma": r"$\Delta\sigma$ (ln sigma GMM)",
+    }
+
+    for d in range(min(dim, 4)):
+        ax = axes[d]
+        name = theta_names[d] if d < len(theta_names) else f"theta_{d}"
+        x = nodes[:, d]
+        order = np.argsort(x)
+        ax.fill_between(x[order], 0, q_disagg[order], alpha=0.35, color="#c4a35a", label="q_disagg")
+        for mname, mean in method_means.items():
+            ax.axvline(
+                mean[d],
+                color=palette.get(mname, "black"),
+                lw=1.8,
+                ls="--",
+                label=mname if d == 0 else None,
+            )
+        ax.set_xlabel(labels.get(name, name))
+        ax.set_ylabel("Disagg mass" if d == 0 else "")
+        ax.grid(True, alpha=0.25)
+
+    if method_means:
+        axes[0].legend(fontsize=7, framealpha=0.95, loc="best")
+    fig.suptitle("Epistemic disaggregation marginals vs learned proposal means", fontsize=11)
+    out = output_dir / "continuous_theta_marginals.png"
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+    return out
+
+
 def plot_continuous_theta_comparison(
     nodes: np.ndarray,
     q_disagg: np.ndarray,
     method_means: dict[str, np.ndarray],
     output_dir: Path,
     q_star: np.ndarray | None = None,
+    theta_names: tuple[str, ...] | None = None,
 ) -> Path:
-    """Scatter the quadrature grid (colored by q_disagg mass) and overlay
-    each method's fitted/reported theta mean, for the continuous-epistemic
-    environment."""
+    """Backward-compatible alias: 4-D marginals for Houng PSHA, 2-D scatter otherwise."""
+    if nodes.shape[1] > 2:
+        names = theta_names or ("b", "m_max", "dmu", "dsigma")
+        return plot_continuous_theta_marginals(nodes, q_disagg, method_means, names, output_dir)
+
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 

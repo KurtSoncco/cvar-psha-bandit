@@ -31,7 +31,6 @@ import numpy as np
 
 from cvar_psha.continuous_env import ContinuousEpistemicEnv
 from cvar_psha.continuous_ground_truth import quadrature_grid
-from cvar_psha.disaggregation import lognormal_exceedance_prob
 
 DEFAULT_FRACTILES = (0.05, 0.5, 0.95)
 
@@ -62,16 +61,16 @@ class HazardCurveResult:
 def exact_hazard_curve(
     env: ContinuousEpistemicEnv,
     y_grid: np.ndarray,
-    deg: int = 40,
+    deg_trunc: int = 8,
+    deg_normal: int = 8,
     fractiles: tuple[float, ...] = DEFAULT_FRACTILES,
 ) -> HazardCurveResult:
-    nodes, weights = quadrature_grid(env.spec.tau_mu, env.spec.tau_sigma, deg=deg)
-    mus, sigmas = env.leaf_params(nodes)
+    nodes, weights = quadrature_grid(env.spec, deg_trunc=deg_trunc, deg_normal=deg_normal)
 
     mean = np.empty(len(y_grid))
     fractile_arrays = {q: np.empty(len(y_grid)) for q in fractiles}
     for i, y in enumerate(y_grid):
-        hazard_node = lognormal_exceedance_prob(mus, sigmas, y)  # P(Y>y|theta) per node
+        hazard_node = env.exceedance_prob(nodes, float(y))
         mean[i] = float(np.sum(weights * hazard_node))
         qs = weighted_quantile(hazard_node, weights, fractiles)
         for q, val in zip(fractiles, qs):
@@ -93,10 +92,9 @@ def hazard_curve_from_samples(
         [float(np.sum(iws * (ys > y)) / n) for y in y_grid]
     )
 
-    mu_all, sigma_all = env.leaf_params(thetas)
     fractile_arrays = {q: np.empty(len(y_grid)) for q in fractiles}
     for i, y in enumerate(y_grid):
-        hazard_theta = lognormal_exceedance_prob(mu_all, sigma_all, y)  # P(Y>y|theta_i)
+        hazard_theta = env.exceedance_prob(thetas, float(y))
         qs = weighted_quantile(hazard_theta, iws, fractiles)
         for q, val in zip(fractiles, qs):
             fractile_arrays[q][i] = val

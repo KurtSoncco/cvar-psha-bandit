@@ -227,7 +227,7 @@ def run_qr_srm_ais(
         m = min(batch_size, budget - n_done)
 
         use_prior_mask = env.rng.random(m) < defensive_eps
-        thetas = np.empty((m, 2))
+        thetas = np.empty((m, env.theta_dim))
         n_prior = int(use_prior_mask.sum())
         n_prop = m - n_prior
         if n_prop > 0:
@@ -237,8 +237,7 @@ def run_qr_srm_ais(
 
         q_mix_pdf = (1.0 - defensive_eps) * proposal.pdf(thetas) + defensive_eps * prior.pdf(thetas)
         prior_pdf = prior.pdf(thetas)
-        mu_leaf, sigma_leaf = env.leaf_params(thetas)
-        ys = np.exp(env.rng.normal(mu_leaf, sigma_leaf))
+        ys = env.sample_y(thetas)
         iw = prior_pdf / np.clip(q_mix_pdf, 1e-300, None)
         for y_i, w_i in zip(ys, iw):
             tracker.update(float(y_i), float(w_i))

@@ -79,11 +79,12 @@ def run_jepa_cvar(
     tail_avg_frac: float = 0.3,
 ) -> MethodResult:
     tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
-    theta_dim = 2
+    theta_dim = env.theta_dim
+    prior_scales = env.prior_scales
     jepa = LightweightJEPA(theta_dim=theta_dim, feat_dim=3, embed_dim=embed_dim, seed=seed, lr=0.08)
     buf = _RolloutBuffer()
 
-    mu_m = np.zeros(theta_dim)
+    mu_m = env.spec.prior_means.copy()
     Ww = np.zeros((theta_dim, embed_dim))
     bw = np.zeros(theta_dim)
 
@@ -99,8 +100,8 @@ def run_jepa_cvar(
 
     for t in range(budget):
         frac = t / max(budget - 1, 1)
-        std = std_start + (std_end - std_start) * frac
-        cov_diag = np.full(theta_dim, std * std)
+        std_frac = std_start + (std_end - std_start) * frac
+        cov_diag = (std_frac * prior_scales) ** 2
         # Robbins-Monro-style step-size decay: raw REINFORCE with a constant
         # step size does not converge (confirmed empirically -- the mean
         # reaches the right neighborhood quickly, then drifts indefinitely
@@ -113,7 +114,7 @@ def run_jepa_cvar(
         mean_history.append(mean_total.copy())
 
         eps = env.rng.standard_normal(theta_dim)
-        theta = mean_total + std * eps  # ~ N(mean_total, diag(std^2))
+        theta = env._clip_theta((mean_total + std_frac * prior_scales * eps)[None, :])[0]
 
         y = float(env.sample_y(theta[None, :])[0])
         prior_pdf = float(env.prior.pdf(theta[None, :])[0])
@@ -166,7 +167,8 @@ def run_jepa_cvar(
             "mu_m": mu_m.copy(),
             "Ww": Ww.copy(),
             "bw": bw.copy(),
-            "final_std": std,
+            "final_std_frac": std_frac,
+            "final_std": std_frac * prior_scales,
             "jepa": jepa,
             "mean_history": mean_history,
             "tail_avg_mean": tail_avg_mean,
@@ -302,7 +304,7 @@ def run_jepa_cvar_v2(
     in the reference algorithm (not a separate local-only weight)."""
     tracker = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
     tracker_raw = OnlineCVaRTracker(v95=v95, eval_every=eval_every)
-    theta_dim = 2
+    theta_dim = env.theta_dim
     prior = env.prior
     mean_theta = prior.mean.copy()
     cov_theta = prior.cov.copy()

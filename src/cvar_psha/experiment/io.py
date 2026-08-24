@@ -141,11 +141,22 @@ def spatial_env_from_config(cfg: dict, rng: np.random.Generator) -> SpatialPortf
 def continuous_env_from_config(cfg: dict, rng: np.random.Generator) -> ContinuousEpistemicEnv:
     c = cfg.get("continuous", {})
     spec = ContinuousEpistemicSpec(
-        mu0=float(c.get("mu0", -1.0)),
-        sigma0=float(c.get("sigma0", 0.6)),
-        tau_mu=float(c.get("tau_mu", 0.5)),
-        tau_sigma=float(c.get("tau_sigma", 0.35)),
-        s_max=float(c.get("s_max", 0.5)),
+        nu=float(c.get("nu", 0.01)),
+        m_min=float(c.get("m_min", 5.0)),
+        m_step=float(c.get("m_step", 0.1)),
+        b_mean=float(c.get("b_mean", 1.0)),
+        b_std=float(c.get("b_std", 0.1)),
+        b_lo=float(c.get("b_lo", 0.7)),
+        b_hi=float(c.get("b_hi", 1.1)),
+        mmax_mean=float(c.get("mmax_mean", 7.0)),
+        mmax_std=float(c.get("mmax_std", 0.3)),
+        mmax_lo=float(c.get("mmax_lo", 5.9)),
+        mmax_hi=float(c.get("mmax_hi", 7.1)),
+        dmu_std=float(c.get("dmu_std", 0.1)),
+        dsigma_std=float(c.get("dsigma_std", 0.05)),
+        sigma0=float(c.get("sigma0", 1.39)),
+        sigma_mag_factor=float(c.get("sigma_mag_factor", -0.14)),
+        distance_km=float(c.get("distance_km", 35.0)),
     )
     return ContinuousEpistemicEnv(spec=spec, rng=rng)
 

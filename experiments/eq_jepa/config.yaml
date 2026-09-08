@@ -1,0 +1,25 @@
+catalog:
+  source: iris # iris | epos | kiknet (the latter needs `csv:`)
+  query:
+    start_time: "2010-01-01T00:00:00"
+    end_time: "2020-01-01T00:00:00"
+    min_latitude: 32.0
+    max_latitude: 37.0
+    min_longitude: -122.0
+    max_longitude: -114.0
+    min_magnitude: 3.0
+grid:
+  min_lat: 32.0
+  max_lat: 37.0
+  min_lon: -122.0
+  max_lon: -114.0
+  n_lat: 8
+  n_lon: 8
+training:
+  issue_times: ["2019-01-01T00:00:00", "2019-02-01T00:00:00", "2019-03-01T00:00:00"]
+  windows: {history_days: 30, long_months: 120, horizon_days: 1, max_events: 256}
+  batch_size: 2
+  epochs: 10
+  lr: 0.0003
+model: {dim: 128}
+output_dir: results/eq_jepa

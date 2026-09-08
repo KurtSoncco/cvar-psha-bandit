@@ -41,6 +41,28 @@ python -m venv .venv
 pip install -e .
 ```
 
+## EQ-JEPA earthquake forecasting
+
+`cvar_psha.eq_jepa` is a separate, prospective forecasting module. It retains
+the existing lightweight NumPy JEPA for CVaR importance sampling and adds a
+PyTorch hierarchical JEPA for catalogue histories. Its rate head guarantees
+that the regional expected rate equals the sum over spatial/magnitude cells;
+`forecast.dat` is compatible with floatCSEP's gridded forecast format.
+
+```bash
+pip install -e .
+eq-jepa --config experiments/eq_jepa/config.yaml
+docker build -t eq-jepa .
+docker run --rm -v "$PWD/results:/app/results" eq-jepa --config experiments/eq_jepa/config.yaml
+```
+
+Catalog source adapters are explicit: `iris` and `epos` query standard FDSN
+event endpoints; `kiknet` consumes an approved local/exported CSV with
+`time,latitude,longitude,depth_km,magnitude[,event_id]`. KiK-net waveform
+archive access is not scraped. The provided `HistoricalRateBaseline` and
+`ETASLiteBaseline` are transparent CSEP-ready baselines; the latter is a
+simple triggering benchmark, not a substitute for calibrated ETAS software.
+
 ## Run experiments
 
 ```powershell

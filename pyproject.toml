@@ -13,10 +13,12 @@ dependencies = [
     "scipy>=1.11",
     "matplotlib>=3.8",
     "PyYAML>=6.0",
+    "torch>=2.2",
 ]
 
 [project.scripts]
 cvar-psha = "cvar_psha.experiment.cli:main"
+eq-jepa = "cvar_psha.eq_jepa.train:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

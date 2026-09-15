@@ -56,8 +56,10 @@ docker build -t eq-jepa .
 docker run --rm -v "$PWD/results:/app/results" eq-jepa --config experiments/eq_jepa/config.yaml
 ```
 
-Catalog source adapters are explicit: `iris` and `epos` query standard FDSN
-event endpoints; `kiknet` consumes an approved local/exported CSV with
+Catalog source adapters are explicit: `usgs` and `epos` query standard FDSN
+event endpoints (`service.iris.edu/fdsnws/event` was retired by EarthScope in
+2023 and is no longer supported; use `usgs` instead); `kiknet` consumes an
+approved local/exported CSV with
 `time,latitude,longitude,depth_km,magnitude[,event_id]`. KiK-net waveform
 archive access is not scraped. The provided `HistoricalRateBaseline` and
 `ETASLiteBaseline` are transparent CSEP-ready baselines; the latter is a

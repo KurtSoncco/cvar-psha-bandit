@@ -84,17 +84,23 @@ class KikNetCatalogClient:
 def get_catalog_client(name: str) -> FDSNEventClient | KikNetCatalogClient:
     """Return the named supported source adapter.
 
-    ``iris`` uses EarthScope/IRIS FDSN; ``epos`` uses the EMSC FDSN endpoint
-    integrated with EPOS. ``kiknet`` expects a user-supplied exported CSV.
+    ``usgs`` uses the USGS ComCat FDSN event service (global, includes the ANSS
+    composite catalog used for California); ``epos`` uses the EMSC FDSN endpoint
+    integrated with EPOS (Europe-Mediterranean). ``kiknet`` expects a
+    user-supplied exported CSV.
+
+    NOTE: EarthScope/IRIS retired ``service.iris.edu/fdsnws/event`` (returns
+    HTTP 410 Gone as of 2023); the former ``iris`` adapter has been removed.
+    Use ``usgs`` for a global/California catalog instead.
     """
     key = name.lower()
-    if key == "iris":
-        return FDSNEventClient("https://service.iris.edu/fdsnws/event/1")
+    if key == "usgs":
+        return FDSNEventClient("https://earthquake.usgs.gov/fdsnws/event/1")
     if key == "epos":
         return FDSNEventClient("https://www.seismicportal.eu/fdsnws/event/1")
     if key in {"kiknet", "k-net", "knet"}:
         return KikNetCatalogClient()
-    raise ValueError("source must be iris, epos, or kiknet")
+    raise ValueError("source must be usgs, epos, or kiknet")
 
 
 def _parse_time(value: str) -> datetime:

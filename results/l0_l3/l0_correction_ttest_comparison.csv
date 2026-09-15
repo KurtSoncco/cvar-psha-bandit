@@ -1,0 +1,5 @@
+test_type,better,indistinguishable,worse,label
+T-test_vs_ETAS,2,67,2,"L0 (fixed catalog, uncorrected)"
+T-test_vs_GR,0,54,17,"L0 (fixed catalog, uncorrected)"
+T-test_vs_ETAS,4,67,0,"L0 (fixed catalog, corrected)"
+T-test_vs_GR,4,65,2,"L0 (fixed catalog, corrected)"

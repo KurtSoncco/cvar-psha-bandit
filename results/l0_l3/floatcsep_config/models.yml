@@ -1,0 +1,20 @@
+- EQJEPA_L0:
+    path: models/EQJEPA_L0
+    class: td
+    forecast_type: gridded
+    fmt: dat
+- EQJEPA_L0_corrected:
+    path: models/EQJEPA_L0_corrected
+    class: td
+    forecast_type: gridded
+    fmt: dat
+- HistoricalRateGR:
+    path: models/HistoricalRateGR
+    class: td
+    forecast_type: gridded
+    fmt: dat
+- ETASLite:
+    path: models/ETASLite
+    class: td
+    forecast_type: gridded
+    fmt: dat

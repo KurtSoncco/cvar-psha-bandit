@@ -49,6 +49,15 @@ PyTorch hierarchical JEPA for catalogue histories. Its rate head guarantees
 that the regional expected rate equals the sum over spatial/magnitude cells;
 `forecast.dat` is compatible with floatCSEP's gridded forecast format.
 
+The encoder's latent is horizon-agnostic; horizon conditioning happens only at
+decode time (`EQJEPA.forecast_rates(batch, horizon_days=...)`), so one trained
+model can be queried at any requested horizon post-hoc -- e.g. writing a 1-day
+and a 30-day forecast from the same forward pass (`train.write_forecast`
+does exactly this, one `forecast_h{H}d.dat` file per horizon). The count head
+is Negative-Binomial, not Poisson: earthquake counts are over-dispersed from
+spatial-temporal clustering, so `forecast.dat` carries an `nb_dispersion`
+column alongside `rate`.
+
 ```bash
 pip install -e .
 eq-jepa --config experiments/eq_jepa/config.yaml

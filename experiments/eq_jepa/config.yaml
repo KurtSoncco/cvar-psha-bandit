@@ -134,6 +134,10 @@ training:
   batch_size: 8
   epochs: 15
   lr: 0.0003
+  horizons:
+  - 1
+  - 7
+  - 30
 testing:
   issue_times:
   - '2019-01-01T00:00:00+00:00'

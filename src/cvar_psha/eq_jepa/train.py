@@ -15,7 +15,7 @@ def main(argv=None):
     p.add_argument("--config", required=True); args=p.parse_args(argv)
     cfg=yaml.safe_load(Path(args.config).read_text())
     source=cfg["catalog"]["source"]; client=get_catalog_client(source)
-    if source.lower()=="kiknet": events=client.fetch_csv(cfg["catalog"]["csv"])
+    if source.lower() in {"kiknet","k-net","knet","local","cached"}: events=client.fetch_csv(cfg["catalog"]["csv"])
     else:
         q=CatalogQuery(**{**cfg["catalog"]["query"], "start_time": datetime.fromisoformat(cfg["catalog"]["query"]["start_time"]).replace(tzinfo=timezone.utc), "end_time": datetime.fromisoformat(cfg["catalog"]["query"]["end_time"]).replace(tzinfo=timezone.utc)})
         events=client.fetch(q)

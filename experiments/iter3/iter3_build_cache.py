@@ -9,7 +9,15 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from datetime import datetime, timezone
 import numpy as np, pandas as pd, torch
-sys.path.insert(0, "repo/src")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+for _c in ("repo/src", os.path.join(_HERE, "..", "..", "src"),
+           os.path.join(_HERE, "repo", "src"), os.path.join(_HERE, "src")):
+    if os.path.isdir(os.path.join(_c, "cvar_psha")):
+        sys.path.insert(0, os.path.abspath(_c))
+        break
+else:
+    raise SystemExit("cannot locate the cvar_psha package: looked for src/cvar_psha "
+                     "beside this script, two levels up, and under ./repo/src")
 from step3_build_cache import FastWindows, GRID, EPOCH
 from cvar_psha.eq_jepa.data import RegionGrid
 

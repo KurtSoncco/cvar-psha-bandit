@@ -11,11 +11,19 @@ Two count targets are stored per sample:
                floatCSEP actually scores)
 """
 from __future__ import annotations
-import sys
+import os, sys
 from datetime import datetime, timedelta, timezone
 import numpy as np, pandas as pd, torch
 
-sys.path.insert(0, "repo/src")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+for _c in ("repo/src", os.path.join(_HERE, "..", "..", "src"),
+           os.path.join(_HERE, "repo", "src"), os.path.join(_HERE, "src")):
+    if os.path.isdir(os.path.join(_c, "cvar_psha")):
+        sys.path.insert(0, os.path.abspath(_c))
+        break
+else:
+    raise SystemExit("cannot locate the cvar_psha package: looked for src/cvar_psha "
+                     "beside this script, two levels up, and under ./repo/src")
 from cvar_psha.eq_jepa.catalog import EarthquakeEvent
 from cvar_psha.eq_jepa.data import CatalogWindowDataset, RegionGrid
 

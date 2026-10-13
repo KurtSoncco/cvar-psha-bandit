@@ -20,7 +20,15 @@ against the step-1 benchmarks stays like-for-like.
 from __future__ import annotations
 import argparse, os, sys, json, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "repo/src")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+for _c in ("repo/src", os.path.join(_HERE, "..", "..", "src"),
+           os.path.join(_HERE, "repo", "src"), os.path.join(_HERE, "src")):
+    if os.path.isdir(os.path.join(_c, "cvar_psha")):
+        sys.path.insert(0, os.path.abspath(_c))
+        break
+else:
+    raise SystemExit("cannot locate the cvar_psha package: looked for src/cvar_psha "
+                     "beside this script, two levels up, and under ./repo/src")
 import numpy as np, pandas as pd, torch
 import torch.nn.functional as F
 from scipy import special

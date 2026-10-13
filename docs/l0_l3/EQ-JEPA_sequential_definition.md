@@ -431,3 +431,430 @@ L0 only; the T-test comparisons in this section therefore compare a rate-correct
 artifacts (in which case the comparison should be redone symmetrically) or a genuine skill
 difference is open, and should be resolved before this section's T-test counts are treated as a
 final ranking.
+
+---
+
+## 9. Extension — a continuous marked point process for L0, with depth
+
+Prompted by a concrete gap found on inspection, not a hypothetical one: the gridded forecast
+`.dat` files L0 writes already carry a depth-bin column pair (`z_0, z_1`, e.g. `0 700` — "somewhere
+in the crust"), but pycsep's own gridded-forecast loader (`GriddedForecast.load_ascii`) builds its
+spatial region from `data[:, :4]` — lon/lat only. The `z_0, z_1` columns are parsed off the line and
+never used again. Depth is not under-resolved; it is **written as a placeholder and then silently
+discarded** by the evaluation path currently in use. This section proposes replacing L0's output
+representation to fix that, and traces the consequence through L1–L3.
+
+### 9.1 Redefinition: L0 emits a continuous intensity, not a grid-and-bin rate
+
+**Current.** `λ(c, m, Δ | t₀)` — a rate per (cell, magnitude-bin), via a softmax allocation head
+`π(c, m | z_t, Δ)` over a fixed discrete grid (§2, L0).
+
+**Proposed (L0′).** A continuous conditional intensity over exact position and depth:
+
+    λ(t, x, y, z, m | z_t, Δ)        x, y continuous (lon/lat or projected coords), z = depth (km)
+
+realized as a decoder conditioned on the same latent `z_t` that already exists — not a new encoder
+or predictor. Candidate decoders, in order of how much they disturb the existing architecture:
+
+1. **Mixture density network** — a mixture of anisotropic 3-D Gaussians/Student-t kernels in
+   `(x,y,z)`, with magnitude-conditional mixture weights, read off `z_t`. Smallest delta: encoder,
+   predictor, and EMA target branch are untouched; only the rate head changes.
+2. **Normalizing flow** over `(x,y,z,m) | z_t` — more expressive, still an exactly-integrable
+   density.
+3. **Neural spatio-temporal point process / diffusion decoder** — samples catalogs directly rather
+   than outputting a density. This is the natural home for the existing Hawkes-like rate correction
+   (§8) to stop being a bolted-on post-hoc patch and become a *learned* part of the decoder.
+
+**A free consequence for I2.** Exact additivity (`λ_parent = Σ_children λ_child`) is currently
+*engineered* via a softmax allocation head specifically to avoid a soft penalty that could leave the
+model incoherent in the tail. A continuous intensity gets this invariant for free: integration of a
+density over any sub-region or sub-interval is automatically consistent with the integral over the
+whole. I2 becomes a property of calculus rather than a head design choice.
+
+### 9.2 L1: the validation track already exists in the installed library — mostly
+
+pycsep ships `csep.core.forecasts.CatalogForecast` (an ensemble of `n_cat` simulated catalog
+realizations, each with real per-event lon/lat/depth/magnitude) and `csep.core.catalog_evaluations`
+with `number_test`, `spatial_test`, `magnitude_test`, `pseudolikelihood_test`, `calibration_test` —
+the catalog-based analogs of N/S/M/CL, built for exactly a model that emits stochastic event sets
+rather than a fixed rate grid. floatCSEP already wraps pycsep, so this is a forecast-writer and
+config change, not new infrastructure (`forecast_type: catalog` instead of `gridded`).
+
+**The gap, checked rather than assumed.** Even the catalog-based `spatial_test` re-grids internally
+(`catalog.spatial_counts()` onto a 2-D `CartesianGrid2D`) to score spatial fit — **no
+depth-consistency test exists anywhere in pycsep.** Given this project's history of two independent,
+stacked bugs inside a *hand-rolled* geometric formula (§8, Gardner-Knopoff), the recommendation is
+specific: build the depth test (call it **D-test**) by reusing pycsep's existing simulate-and-rank
+pattern (`_simulate_catalog`, then rank the observed depth histogram/KDE against the same 1000
+simulated catalogs already being generated for S/M/CL) rather than deriving a new depth-binned
+likelihood from first principles.
+
+### 9.3 L2: exact depth is not cosmetic here — it is a lever on an already-open gap
+
+With real per-event depth instead of a fixed assumption, `R_hyp = √(R_epi² + z²)` replaces whatever
+implicit nominal-depth stand-in the point-source simulator uses today — mattering most exactly where
+it matters most for risk (shallow, near-site events). It is also a direct, testable lever on the one
+quantitative gap already on record: the physics-only L2 residual (σ_lnSa ≈ 0.27–0.34) sits at
+roughly half the empirical NGA-West2 total sigma (≈0.5–0.7), attributed to randomizing only
+source/path/site *parameters*, not additional unmodeled variability. Real per-event depth variability
+was structurally unavailable before §9.1; feeding it through is a new, falsifiable sub-hypothesis
+(H7 below), not a guess that it will help.
+
+### 9.4 L3 / portfolio: what exact locations actually unlock
+
+The SDOF physics is 0-D and indifferent to location — but what it *receives* is not, and a
+0.5°×0.5° grid cell (~50×50 km) currently forces every asset inside it toward identical treatment.
+Exact hypocenter locations make a true spatial portfolio possible: each asset at its own coordinates,
+its own `R_hyp`, with ground-motion residuals spatially correlated across sites (e.g. a Jayaram &
+Baker-style empirical correlation model for `ε`). This is not optional machinery for later — **a
+portfolio CVaR is undefined without it**, since tail risk depends entirely on whether nearby assets
+fail together or independently, and a shared grid cell currently forces that answer by construction
+rather than by data.
+
+### 9.5 New falsifiable hypotheses
+
+**H6 — untested.** A continuous mixture-density (or flow) decoder conditioned on `z_t` achieves S/M/CL-equivalent
+calibration (via the catalog-based D/S/M tests, §9.2) at least as well as the discrete softmax head,
+while removing grid-discretization error at cell boundaries. *Test:* train both heads on identical
+data/latent, compare catalog-based test pass rates and spatial log-likelihood.
+
+**H7 — untested.** Feeding real per-event depth into L2 (replacing the fixed-depth placeholder)
+closes part of the σ_lnSa gap between the physics-only simulator (≈0.27–0.34) and empirical NGA-West2
+total sigma (≈0.5–0.7). *Test:* rerun the existing L2 validation figure with depth-varying vs.
+fixed-depth inputs, holding source/path/site randomization identical, and compare residual variance
+directly.
+
+**H8 — untested.** Spatial correlation of ground-motion residuals across a multi-site portfolio
+(enabled only once exact locations replace grid cells) changes portfolio CVaR_99 by more than the
+single-asset pilot's hysteresis effect (§4.1, +109%). *Test:* synthetic 2–3 asset portfolio at known
+separation distances, compare correlated vs. independent-residual CVaR.
+
+### 9.6 Build order addition
+
+8. **M8 — swap L0's rate head.** Mixture-density decoder over `(x,y,z,m) | z_t`, trained against the
+   same catalog and latent pipeline already in place. *Deliverable:* a catalog-sampling forecast
+   (`CatalogForecast`-compatible) alongside the existing gridded one, for a direct head-to-head.
+9. **M9 — stand up catalog-based L1.** `floatcsep` config switched to `forecast_type: catalog`;
+   wire pycsep's `number_test`/`spatial_test`/`magnitude_test`/`pseudolikelihood_test`; implement the
+   D-test (§9.2) by extending `_simulate_catalog`'s pattern to depth. *Deliverable:* first honest
+   scoreboard for the point-process forecast, run H6.
+10. **M10 — depth into L2.** Replace the fixed-depth placeholder in the stochastic point-source
+    simulator with real per-event depth from the (now depth-resolved) catalog; rerun the σ_lnSa
+    validation. *Deliverable:* test H7; if confirmed, a quantified, closed fraction of the
+    empirical-sigma gap.
+
+### 9.7 Further idealization improvements noted alongside this redesign, by layer
+
+**L1.** A flat `M_c = 2.8` completeness cutoff over 2000–2024 is itself an idealization — real
+network density changed over that span, so a time-varying `M_c(t)` surface would be more honest and
+would change which early-period events enter declustering and scoring. The original plan's named
+declustering method (Zaliapin–Ben-Zion, nearest-neighbor) operates natively in continuous
+space-time-magnitude and would pair more naturally with L0′ than Gardner-Knopoff's window method
+does — worth revisiting now that the representation is moving to continuous anyway. The standing
+caveat that GR/ETAS-lite have not received the same Hawkes-like rate correction as L0 (§8) remains
+open and is cheaper to close first, independent of this redesign.
+
+**L2.** Report the GMPE residual as its standard three-component partition (inter-event `τ`,
+inter-site `φ_s2s`, single-station `φ_ss`) instead of one aggregate `σ_lnSa`, so the empirical-vs-
+physics gap is testable mechanism-by-mechanism rather than as one lumped number. Site/path
+parameters are currently drawn from one nationwide distribution; USGS Vs30 grids (an already-reachable
+science API) would let site terms be regionally conditioned instead.
+
+**L3.** The pilot uses one oscillator (`T₁=0.5s`, `η=0.25`); a small suite of representative
+building-class oscillators spanning a real portfolio turns L3 from an illustrative case into
+something that can answer portfolio questions. Caveat 3 from the verification report — SDOF
+validated against closed-form/qualitative IDA shape, not a specific published curve for a named
+building class — remains open. A clean, separate falsifiable question worth adding alongside H1:
+compare SDOF-based tail risk against a cheap 3-DOF shear-building model for identical input motions,
+to isolate how much of CVaR is attributable to the single-degree-of-freedom idealization itself,
+as distinct from the hysteresis mechanism H1 already measured.
+
+## 10. Update — the next iteration executed: ten open defects addressed, and the target itself indicted
+
+Everything in this section was run on the corrected catalog with the trained checkpoint from §8,
+scored with `csep.core.poisson_evaluations` and `csep.core.catalog_evaluations` directly (the same
+functions floatCSEP's `tests.yml` wraps) over the same 71 monthly test windows, 2019-01 to 2024-11.
+Where a correction is fitted, it is fitted on the 108 pre-2019 windows and frozen before scoring.
+
+### 10.1 Two of the previous section's headline numbers were measuring the plumbing
+
+Regenerating forecasts one decode per issue time, at each window's own horizon, instead of through
+`train.py`'s `write_forecast` (which averages rates over a shuffled-`DataLoader` batch mixing the
+1/7/30-day horizons) reverses the sign of the rate error: L0 forecasts a mean of **58.8 events per
+window against 17.1 observed**, an over-forecast of 3.4x, not the 3.5x under-forecast reported in
+§8. The ratio is the declustering ratio. L0 was trained on the aftershock-inclusive catalog (19,152
+events) and scored against the declustered independent catalog (5,491); 5491/19152 = 0.287, and the
+Poisson-MLE constant lands at `c0 = 0.326`.
+
+Generalising the correction from the two-parameter Hawkes form to
+
+        mu_w = c0 * Lambda_w * (1 + amp * feat_w(tau))
+
+with `c0` profiled out analytically (a multiplicative scale has a closed-form Poisson MLE) makes the
+**excitation amplitude fit to zero for all three models**, with log-likelihood identical to
+scale-only. The §8 "Hawkes-like rate correction" was fitting a constant. The open §8 caveat — that
+the baselines had not received the same correction — is now closed by applying this one correction
+symmetrically, and the answer is that symmetry does not rescue L0:
+
+| model, rescaled on pre-2019 windows | N | S | M | CL |
+|---|---|---|---|---|
+| EQ-JEPA L0 (original checkpoint) | 85.9% | **8.5%** | 83.1% | **7.0%** |
+| HistoricalRateGR | 95.8% | 97.2% | 93.0% | 83.1% |
+| ETASLite | 90.1% | 98.6% | 81.7% | 98.6% |
+
+L0 fails the **spatial** test in 91% of windows, and since the S-test rescales to the observed total
+this is not a rate artifact. Paired T-tests: L0 beats HistoricalRateGR in **0 of 71** windows
+(37 tied, 34 worse, mean information gain −0.52 per event) and ETASLite in 1 of 71. **H1 is refuted
+on this run.**
+
+![Symmetric rescaling and consistency scoring]({{artifact:art_3ef7c913-9fa0-48bc-8c7b-7b2133ec5070}})
+
+### 10.2 The encoder was collapsed, and the input embedding — not the missing isotropy term — was why
+
+Geometric diagnostics on the encoder output that L1–L4 actually consume (not a projector output;
+per arXiv:2609.35288 a backbone can collapse while a projector-level objective looks healthy),
+over 179 issue times:
+
+- **participation ratio 1.09 of 128**; PC1 carries 95.5% of the variance, three PCs carry 99%
+- mean pairwise cosine between issue times **0.958**, 42% of pairs above 0.99
+- **no dead units** (per-dimension std 0.012–0.87) — the collapse is directional, so a
+  per-dimension-std check alone would have missed it
+- 85% of 512 sketched 1-D projections reject normality (median KS p = 2.3e-4)
+
+The behavioural control settles it: replacing the latent with a constant (the pre-2019 mean) and
+rescaling identically gives N 95.8 / S 9.9 / M 81.7 / CL 8.5 percent against the trained encoder's
+85.9 / 8.5 / 83.1 / 7.0. **A frozen latent is as good as or better than the trained one on every
+test.** The predicted collapse signature from §3 (N passes while S and CL fail) is confirmed, and
+the stronger statement holds: the trained encoder contributes nothing measurable to the forecast.
+
+![Latent collapse diagnostics and the frozen-encoder control]({{artifact:art_6ef6e1fe-3758-40d6-94d1-03dd024eeae5}})
+
+A 2x2 ablation — {original, fixed} event embedding x {no, with} a LeJEPA-style SIGReg isotropy
+penalty (arXiv:2511.08544; Epps-Pulley closed form, weight set by gradient-norm matching at
+initialisation, not tuned) — all four arms retrained on declustered counts, isolates the cause:
+
+| arm | participation ratio | mean cosine | Gaussianity rejected | N | S | M | CL |
+|---|---|---|---|---|---|---|---|
+| A original embedding | 1.13 | 0.91 | 78% | 94 | 89 | 86 | 49 |
+| B original + SIGReg | 1.18 | 0.82 | 82% | 92 | 89 | 86 | 54 |
+| C **fixed embedding** | **22.4** | **0.28** | **0%** | 89 | 90 | 90 | **76** |
+| D fixed + SIGReg | 22.7 | 0.27 | 0% | 89 | 87 | 90 | 72 |
+
+Three readings. First, **retraining the unchanged architecture on the declustered target takes the
+S-test from 8.5% to 88.7%** — the catastrophic spatial failure was also the train/score catalog
+mismatch, not a broken spatial head. Second, the §9-agreed encoder fix (per-feature normalisation,
+Fourier features for lat/lon/depth, Time2Vec for `dt`, log-compressed long-history channels) is what
+de-collapses the latent, and it buys real joint-likelihood quality (CL 49% → 76%). Third, **SIGReg
+cannot rescue the original embedding** (1.13 → 1.18) and adds nothing once the embedding is fixed:
+the binding constraint on collapse was the input representation, not the absence of a regulariser.
+This vindicates the §9 decision to make the fix symmetric rather than decoder-only.
+
+One tension to carry: the de-collapsed arms have better CL pass rates but *worse* paired T-tests
+(0/40/31 at −0.48 versus arm A's 0/65/6 at −0.25). CL is self-consistency; the T-test is absolute
+likelihood against a competitor. A sharper forecast can be consistent with its own uncertainty while
+assigning less probability to the events that actually occurred than a smooth historical map does.
+
+![The 2x2 ablation]({{artifact:art_53da9b18-f2d4-4183-8928-6d12516c7fc4}})
+
+### 10.3 The point-process redesign (M8–M10): the magnitude side works, the spatial side does not
+
+`model_pp.py` implements §9.1 at its least disruptive setting: the same JEPA encoder (fixed
+embedding), and a decoder emitting
+
+        lambda(t, x, y, z, m | z_t, Delta)
+            = N(z_t, Delta) * f_t(t) * f_xy(x, y) * f_z(z) * f_m(m)
+
+with every factor closed-form and exactly normalised over the modelling domain — a 24-component
+axis-aligned Gaussian mixture in (lon, lat, depth), a truncated Gutenberg-Richter magnitude law with
+learned `b` and a learned global upper bound, and `f_t` uniform within the window. Training is the
+inhomogeneous marked-Poisson log-likelihood of the real event coordinates: no grid, no binning.
+It self-calibrates (mean 18.0 events per window against 17.1 observed, `c0 = 0.97`).
+
+**What it fixes — the moment budget becomes well-posed.** Implied moment rate **4.14e18 N·m/yr,
+0.38x the observed release**, against 4x to 60x for every gridded forecast (§10.4). A truncated GR
+with a learned `Mmax = 7.45` has finite moment content where an open [5.5, 8.5] bin does not.
+Learned `b = 1.00` against the catalog's 0.84 is why it lands below rather than above.
+
+**What it breaks — the spatial field.** On the gridded battery, S drops to 9.9% (against 90.1% for
+the gridded head on the same encoder) and CL to 7.0%. On pycsep's catalog track: number 89%,
+magnitude 96%, pseudolikelihood 75%, **spatial 31%** with median quantile 0.994 and a
+calibration-test quantile of 2e-46. Both tracks say the forecast is too diffuse, and the mean
+intensity map shows why: axis-aligned components produce cross-shaped streaks where California has
+fault-aligned lineaments. **The fix direction is a spatial family that can be anisotropic** — full
+covariance components, a normalising flow, or a continuous intensity modulated by a fixed
+high-resolution smoothed-seismicity prior — not more components. H6 is therefore **not supported as
+implemented**, with the failure localised to the spatial factor rather than to the point-process
+formulation.
+
+![Point-process forecast on both test tracks]({{artifact:art_a5229f22-67de-4cfe-a1e8-1762c624905e}})
+
+### 10.4 Energy: the useful forms, and why the open top bin breaks the rest
+
+Converting magnitude to energy adds no information — `log10 E_s = 1.5 M + const` is a bijection, so
+a forecast of converted energy is a forecast of magnitude pushed through a monotone transform. Worse,
+summing energy is effectively taking a maximum: on this catalog the single largest event carries a
+median **42%** of a monthly window's radiated energy (**50%** annually), the largest M7.2 carries 41%
+of the whole 2000–2024 total, the ten largest carry 88%, and window log-energy correlates 0.98 with
+the window's maximum magnitude against 0.75 for log-count.
+
+![Window energy tracks the largest event, not the count]({{artifact:art_75221946-9f78-4f9f-8372-db4faf63598c}})
+
+What survives is energy as a **weighting and a constraint**, not a target:
+
+- **Moment-rate budget.** Observed release is 1.08e19 N·m/yr (declustered) and 1.26e19 (full
+  catalog). Every gridded forecast overshoots by 4x (L0) to 60x (ETASLite), almost entirely through
+  the open top magnitude bin, whose Kostrov integral is dominated by its upper edge because
+  `M0 ~ 10^(1.5m)` grows faster than `10^(-bm)` decays for `b < 1.5`. Truncating that bin at M7.5
+  drops the implied rate 4–5x; `b = 1.0` halves it. **A gridded forecast with an open top bin has no
+  well-posed moment content** — an independent argument for §9.1 that does not depend on depth.
+  Note also that the M-test passes for every model while the moment budget is off by an order of
+  magnitude: the two diagnostics are not redundant.
+- **An E-test** (energy analog of the N-test, simulate-and-rank over 1000 synthetic catalogs with
+  within-bin GR magnitudes) is implemented but has little discriminating power: pass rates 70–92%
+  because the simulated energy distribution is dominated by whether a top-bin event is drawn. It does
+  catch models that over-allocate to large magnitudes (21–30% of windows below the 2.5% quantile for
+  the fixed-embedding arms and ETASLite).
+- **An energy channel as an auxiliary target** remains untried and is the one form still worth
+  building, using measured `Me`/`M0` rather than converted magnitude.
+
+![Moment-rate budget and the E-test]({{artifact:art_9137d256-70e7-47f8-b58c-4054729b59a8}})
+
+### 10.5 Depth: a working D-test, and the first quantified depth lever on CVaR
+
+No depth test exists in pycsep, so one was written on pycsep's own simulate-and-rank pattern:
+bin depth, take the forecast's depth distribution from its simulated catalogs, score the observed
+depth histogram by Poisson joint log-likelihood against the forecast's expected histogram rescaled
+to the observed count (exactly how the M-test treats magnitude), and rank that score against 1000
+synthetic depth histograms from the same forecast. The point-process L0 **passes in 91.5% of
+windows** (median quantile 0.32); forecast median depth 7.3 km against 8.1 km observed, though the
+forecast's depth distribution barely varies window to window (IQR 0.5 km against 1.6 km observed).
+
+Propagating real depths through L2–L4 for a Los Angeles site: using `R_hyp = sqrt(R_epi^2 + z^2)`
+instead of `R_epi` cuts **CVaR_0.99 of loss from 0.0120 to 0.0080, a 33% reduction**, and mean loss
+by 26%. Equivalently, treating hypocentres as surface sources inflates the tail by **49%**. The
+effect is entirely near-field — only 4% of forecast events fall within 50 km, and those set the tail.
+This is a **lower bound**: the ductility map used is the linear limit `mu_d = Sa/eta`, and §4.1 found
+a degrading oscillator roughly doubles CVaR_0.99. H7 is therefore supported in the sense that depth
+is a material lever, though it moves the tail by changing distance rather than by closing the
+sigma gap.
+
+![Depth test and the depth sensitivity of CVaR]({{artifact:art_c328d88e-3a3b-491c-904f-27eb13345c01}})
+
+### 10.6 What actually moves the tail
+
+Three levers, measured on the same site and the same forecast:
+
+| lever | change in CVaR_0.99 |
+|---|---|
+| ground-motion sigma 0.33 → 0.70 (to the empirical range) | **+46%** |
+| depth ignored (hypocentres treated as surface sources) | **+49%** |
+| count dispersion, NB `r = 0.25` against Poisson | +7% |
+
+The count-dispersion result is worth stating plainly, because L0 carries a negative-binomial
+dispersion head whose purpose was tail risk. Of 1,760 cell/magnitude bins only 74 have 5 or more
+observed events; of those, 57% fit at the Poisson limit and 5.4% reject Poisson — the nominal
+false-positive rate — while the head predicts median `r = 2.0`. The head over-disperses against a
+target that is Poisson. The aggregate window-total likelihood ratio does reject Poisson
+(`r = 22.4`, p = 1e-4) but observed variance/mean is 0.92: that signal is the forecast's own
+uncorrelated rate fluctuation being absorbed by the dispersion parameter. And it does not matter
+anyway — the loss tail is mark-driven, set by *which* event occurs rather than how many.
+
+The L2 sigma gap is the lever that does matter and cannot be closed here: the within-scenario
+`sigma_ln(Sa)` is 0.331, so reaching the empirical total range 0.5–0.7 requires a missing
+0.375–0.617 in quadrature from terms this physics randomisation does not touch (directivity, basin
+response, model form). Documented, not closed; strong-motion records remain unavailable.
+
+![Dispersion, sigma, and what moves the tail]({{artifact:art_c351fe3d-e95b-4aca-b8a4-7b6643a38c8a}})
+
+### 10.7 The finding that reframes L0: the target has no monthly memory
+
+The diagnostics that would have justified an H-JEPA-style multi-level temporal hierarchy
+(arXiv:2610.06805) came back clean, so the hierarchy was not built:
+
+- **Temporal additivity already holds.** Decoding one latent at 1, 7, 30, 90 and 365 days gives an
+  implied daily rate of 0.583 at every horizon (max/min 1.046). Summing three consecutive one-month
+  forecasts against a single three-month decode: median residual −0.6%, IQR ±10%. The time half of
+  invariant I2 is satisfied empirically, not only by construction.
+- **A conditional-mean decoder is not the limitation.** Randomized PIT values of observed counts
+  under Poisson(total) are uniform (KS p = 0.58) with observed variance/mean 0.91. The objection that
+  one-step latent regression identifies a mean rather than a transition kernel (arXiv:2609.36227)
+  does not bite for window counts on a declustered catalog. The learned horizon correction does
+  nothing for the same reason: declustering removes the Omori decay it was designed to capture.
+
+And then the target itself: observed monthly counts have **lag-1 autocorrelation −0.08**, variance/mean
+**0.92**, one of twelve ACF lags outside the 95% envelope (chance), and **no model has positive
+correlation with them** — point-process L0 −0.05, gridded L0 −0.09, HistoricalRateGR −0.16,
+ETASLite −0.17. At 90 and 365 days the level is right to 4–7% and the correlation is still zero.
+
+![Horizon coherence, predictive calibration, and the absence of monthly memory]({{artifact:art_15edd77e-c6bf-4cf3-946b-506d76d73f48}})
+
+This is not a California quirk. Across four regions from USGS ComCat, two magnitude thresholds and
+three window lengths, declustered with the same vetted Gardner-Knopoff implementation:
+
+| region | variance/mean, raw → declustered | out-of-sample Poisson log-lik gain per event, raw → declustered |
+|---|---|---|
+| California M2.8+ | 173 → 0.98 | −0.002 → 0.0001 |
+| Japan M4.0+ | 443 → 1.78 | 0.017 → 0.006 |
+| Chile M4.0+ | 98 → 1.60 | 0.047 → 0.005 |
+| Italy–Greece M3.5+ | 36 → 5.99 | 0.221 → 0.212 |
+
+In every raw catalog an exponential-decay excitation feature buys real out-of-sample likelihood;
+after declustering the gain collapses to near zero and dispersion collapses to Poisson. The exception
+is instructive — Italy–Greece M3.5+ retains variance/mean 6.0, lag-1 ACF 0.81 and nearly all its
+predictability, i.e. Gardner-Knopoff's fixed windows do not remove swarm-type clustering there.
+
+**Declustering removes precisely the signal L0 is being asked to learn.** H1 cannot be supported on
+this target by any method, because after declustering and monthly aggregation there is nothing left
+to predict beyond the rate. This is a target-definition result, not an architecture result.
+
+![Where predictable signal lives]({{artifact:art_6509467a-c2e5-448d-93ba-3557ac42d8dc}})
+
+### 10.8 Revised hypotheses
+
+- **H1** (JEPA representation beats statistical baselines on L1 consistency) — **refuted on the
+  declustered monthly target**, and now known to be unfalsifiable there: the target is Poisson.
+  Retire it in this form; restate on a target that carries signal (§10.9, H9).
+- **H6** (a continuous intensity passes the catalog-based track where the gridded form cannot) —
+  **not supported as implemented**. The failure is localised to the spatial factor; the magnitude
+  and depth factors pass.
+- **H7** (real depth closes part of the L2 sigma gap) — **partially addressed**. Depth is a material
+  lever on the tail (49%) but acts through distance, not through sigma; the sigma gap is unchanged and
+  is independently worth 46%.
+- **H8** (spatially correlated residuals across a portfolio change CVaR by more than the
+  single-asset hysteresis effect) — **not tested**; unchanged.
+- **H9 (new).** On the *undeclustered* catalog at sub-week horizons, a JEPA latent beats a fitted
+  ETAS-style excitation feature in out-of-sample Poisson log-likelihood. The §10.7 measurements give
+  the baseline to beat per region (0.017–0.22 nats per event) and the null (near zero after
+  declustering), so this is falsifiable before any model is built.
+- **H10 (new).** An anisotropic spatial decoder (full-covariance components or a normalising flow)
+  recovers the gridded head's S-test pass rate while keeping the point-process form's well-posed
+  moment content. Test: swap only the spatial factor in `model_pp.py`, hold everything else fixed,
+  rescore both tracks.
+
+### 10.9 Revised build order
+
+11. **M11 — move the target before touching the architecture.** Define L0's target on the
+    undeclustered catalog at 1-, 3- and 7-day horizons, with the excitation-feature benchmark of
+    §10.7 as the baseline to beat. Deliverable: a target specification plus the per-region
+    predictability table that makes H9 falsifiable. This precedes everything else.
+12. **M12 — anisotropic spatial decoder.** Replace only `f_xy` in `model_pp.py` (full-covariance
+    mixture first, normalising flow second) and rescore both tracks. Deliverable: H10.
+13. **M13 — moment-rate constraint as a training term.** Penalise the Kostrov-implied moment rate
+    against a regional budget during training rather than checking it afterwards; report the
+    forecast's moment rate alongside N/S/M/CL as standard.
+14. **M14 — close the L2 sigma gap or bound it.** Partition the residual into inter-event,
+    inter-site and single-station components (§9.7) and, failing access to records, carry the
+    0.375–0.617 missing-sigma interval explicitly into every CVaR the pipeline reports.
+15. **M15 — retire the NB dispersion head or justify it on a target that is overdispersed.** On the
+    declustered target it over-disperses and does not move the tail; on the undeclustered target of
+    M11 it would have real work to do.
+
+### 10.10 Status of the §9.7 idealization list
+
+Addressed: the symmetric-baseline caveat (§10.1, closed), the open-top-bin moment problem (§10.4,
+diagnosed), real depth into the forecast and into `R_hyp` (§10.5, done), magnitude-threshold
+sensitivity (§10.7, four regions x two thresholds). Still open: time-varying `M_c(t)`, the
+Zaliapin-Ben-Zion nearest-neighbour declustering alternative (now more clearly motivated — §10.7
+shows how much the declustering choice determines what is left to predict), the three-component
+GMPE residual partition, regionalised Vs30, the multi-oscillator portfolio, and the SDOF-vs-MDOF
+comparison.

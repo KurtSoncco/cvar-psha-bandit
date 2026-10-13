@@ -1,0 +1,7 @@
+model,scale_c0,mean_forecast,N,S,M,CL
+EQJEPA_L0,1.0,58.79,0.0,8.5,83.1,7.0
+EQJEPA_L0_corrected,0.3255400847577953,19.14,85.9,8.5,83.1,7.0
+HistoricalRateGR,1.0,19.15,93.0,97.2,93.0,83.1
+HistoricalRateGR_corrected,0.911995261275876,17.65,95.8,97.2,93.0,83.1
+ETASLite,1.0,23.89,78.9,98.6,81.7,98.6
+ETASLite_corrected,0.7968174503268773,19.04,90.1,98.6,81.7,98.6

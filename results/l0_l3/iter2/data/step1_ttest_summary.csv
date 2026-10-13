@@ -1,0 +1,5 @@
+model,reference,better,tied,worse,mean_information_gain
+EQJEPA_L0,ETASLite,0,2,69,-1.6627
+EQJEPA_L0,HistoricalRateGR,0,1,70,-1.8635
+EQJEPA_L0_corrected,ETASLite_corrected,1,46,24,-0.3855
+EQJEPA_L0_corrected,HistoricalRateGR_corrected,0,37,34,-0.5166

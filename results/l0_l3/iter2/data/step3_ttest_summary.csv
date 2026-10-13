@@ -1,0 +1,5 @@
+model,reference,better,tied,worse,mean_information_gain
+A_original,HistoricalRateGR,0,65,6,-0.2541
+B_original_sigreg,HistoricalRateGR,0,63,8,-0.2642
+C_fixed_embedding,HistoricalRateGR,0,40,31,-0.4762
+D_fixed_sigreg,HistoricalRateGR,0,42,29,-0.4829

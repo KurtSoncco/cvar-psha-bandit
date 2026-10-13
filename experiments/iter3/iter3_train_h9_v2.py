@@ -30,8 +30,13 @@ else:
     raise SystemExit("cannot locate the cvar_psha package: looked for src/cvar_psha "
                      "beside this script, two levels up, and under ./repo/src")
 import numpy as np, pandas as pd, torch
+from math import lgamma
+
+# scipy.special.gammaln on integer counts, without the scipy dependency:
+# the Lambda images ship a torch/scipy pair compiled against numpy 1.x, so any
+# extra binary-numpy consumer is one more chance of an ABI clash.
+_lgamma = np.vectorize(lgamma, otypes=[float])
 import torch.nn.functional as F
-from scipy import special
 from cvar_psha.eq_jepa.model import EQJEPAConfig
 from cvar_psha.eq_jepa.model_v2 import build_model
 from cvar_psha.eq_jepa.model_pp import PointProcessHead, PPConfig
@@ -151,7 +156,7 @@ def main():
 
     def pll(n, mu):
         mu = np.clip(mu, 1e-12, None)
-        return n * np.log(mu) - mu - special.gammaln(n + 1)
+        return n * np.log(mu) - mu - _lgamma(n + 1.0)
 
     base = pd.read_csv("iter3_window_forecasts.csv")
     rows = []

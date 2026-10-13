@@ -37,3 +37,22 @@ likelihood swing between -12 and -24 nats across epochs.
 Output `iter3_h9_summary_<tag>.csv` carries one row per horizon. H9 is
 supported only if `gain_per_event` at `horizon_days = 1` rises well above the
 preliminary +0.091 and `l0_minus_etas` closes from -0.572 toward zero.
+
+## Environment on a fresh GPU host
+
+The Lambda images ship a system `torch` and `scipy` under
+`/usr/lib/python3/dist-packages` that were compiled against NumPy 1.x, so a
+plain `pip install numpy` puts 2.x on the path and torch dies with
+`RuntimeError: Numpy is not available` (and scipy with
+`numpy.dtype size changed`). Use a clean virtualenv with the official CUDA
+wheel rather than pinning around the system packages:
+
+    python3 -m venv ~/venv-h9                 # NOT --system-site-packages
+    source ~/venv-h9/bin/activate
+    pip install -q --upgrade pip
+    pip install -q torch --index-url https://download.pytorch.org/whl/cu124
+    pip install -q numpy pandas
+    python -c "import torch, numpy; print(torch.__version__, numpy.__version__, torch.cuda.is_available())"
+
+The training path imports only `numpy`, `pandas`, `torch` and the standard
+library - no scipy, no pycsep, no seismostats.

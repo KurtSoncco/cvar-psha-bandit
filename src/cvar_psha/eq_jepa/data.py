@@ -63,4 +63,5 @@ class CatalogWindowDataset(Dataset):
         future_long[-1] = [len(future), sum(10 ** (1.5*e.magnitude) for e in future) / 1e18]
         return {"events": torch.from_numpy(tokens), "event_mask": torch.from_numpy(mask), "long_history": torch.from_numpy(long),
                 "future_events": torch.from_numpy(future_tokens), "future_mask": torch.from_numpy(future_mask),
-                "future_long_history": torch.from_numpy(future_long), "counts": torch.from_numpy(counts)}
+                "future_long_history": torch.from_numpy(future_long), "counts": torch.from_numpy(counts),
+                "horizon_days": torch.tensor(float(self.horizon_days))}

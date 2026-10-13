@@ -1,0 +1,168 @@
+arxiv_id,date,title,score,topics
+2607.24109v1,2026-07-27,Earthquake Aftershock Forecasting using Conditional Generative Models,7,collapse_reg;geo;timeseries
+2608.27395v1,2026-08-27,LeVJEPA: Efficient & Scalable Video Pretraining without the Heuristics,6,collapse_reg;theory;timeseries
+2603.03079v1,2026-03-03,Probabilistic and Alarm-Based Evaluation of a b-Value-Driven Deep Learning Earthquake Forecast,5,geo;timeseries
+2606.10069v4,2026-06-08,Using Seismic Statistical Features and VQ-VAE to Improve Spatiotemporal Seismicity Predictability,5,collapse_reg;geo;timeseries
+2608.18791v1,2026-08-19,Scaling-law-informed neural point processes for earthquake sequence forecasting,5,geo;timeseries
+2608.24561v1,2026-08-25,SeisMamba: Low-Latency Single-Station Seismic Magnitude Estimation for Spatially Distributed Earthquake Early Warning,5,geo;hierarchy;timeseries
+2505.15588v4,2025-05-21,EPBench: A Benchmark for Short-term Earthquake Prediction with Neural Networks,4,geo;timeseries
+2505.18874v1,2025-05-24,A Global-scale Database of Seismic Phases from Cloud-based Picking at Petabyte Scale,4,geo;timeseries
+2505.20494v1,2025-05-26,Video-based Direct Time Series Measurement of Along-Strike Slip on the Coseismic Surface Rupture During the 2025 Mw7.7 Myanmar Earthquake,4,geo;theory;timeseries
+2506.04257v2,2025-06-02,Deformation Due to Non-planar Fault Movement in Fractional Maxwell Medium,4,geo;theory
+2509.10560v1,2025-09-10,GTS_Forecaster: a novel deep learning based geodetic time series forecasting toolbox with python,4,geo;timeseries
+2509.14661v1,2025-09-18,"Neural Earthquake Forecasting with Minimal Information: Limits, Interpretability, and the Role of Markov Structure",4,geo;timeseries
+2512.06407v2,2025-12-06,Toward Trustworthy Earthquake Catalogs in the Era of Automated Detection: A Probabilistic Framework for Robust Earthquake Location,4,geo;hierarchy
+2601.21516v2,2026-01-29,"PINN-based short-term forecasting of fault slip evolution during the 2010 slow slip event in the Bungo Channel, Japan",4,geo;timeseries
+2605.21437v1,2026-05-20,Neural Negative Binomial Regression for Weekly Seismicity Forecasting: Per-Cell Dispersion Estimation and Tail Risk Assessment,4,collapse_reg;geo;timeseries
+2607.01145v3,2026-07-01,Hierarchical Self-Supervised Representation Learning Framework for Multivariate Time Series Grounded in ECG Analysis,4,hierarchy;theory;timeseries
+2608.17542v1,2026-08-18,No Gaussian Required: Contrastive Inverse Dynamics for JEPA World Models,4,collapse_reg;theory
+2609.17029v1,2026-09-15,Distributed JEPA: A Self-Supervised Framework for Energy Forecasting,4,collapse_reg;timeseries
+2609.33497v1,2026-09-27,Hamiltonian JEPA: Action-Conditioned World Models with an Inherited Control State,4,collapse_reg;hierarchy
+2609.35288v2,2026-09-28,$λ$-JEPA Spectral Anti-Collapse Regularization for Self-Supervised Learning,4,collapse_reg;theory
+2609.37441v1,2026-09-29,Anisotropic Representations Improve Planning in JEPA World Models,4,collapse_reg;theory
+2506.03977v1,2025-06-04,"Determination of Effect of the Movement of a Finite, Dip-slip Fault in Viscoelastic Half-space of Fractional Burger Rheology",3,geo;theory
+2506.04777v1,2025-06-05,Detailing the stress pattern in the area of central Ionian Islands,3,geo;timeseries
+2506.22129v1,2025-06-27,Earthquake Damage Grades Prediction using An Ensemble Approach Integrating Advanced Machine and Deep Learning Models,3,geo;timeseries
+2509.00268v4,2025-08-29,Remotely sensing stress evolution in elastic media: a passive approach to earthquake monitoring,3,collapse_reg;geo
+2509.04308v1,2025-09-04,Learning Optimal Crew Dispatch for Grid Restoration Following an Earthquake,3,geo;timeseries
+2510.23795v1,2025-10-27,Exploration of Machine Learning Methods to Seismic Event Discrimination in the Pacific Northwest,3,geo;timeseries
+2512.13197v2,2025-12-15,Parameter-Efficient Transfer Learning for Microseismic Phase Picking Using a Neural Operator,3,geo;timeseries
+2601.20136v3,2026-01-27,Physics-informed deep learning links geodetic data and fault friction,3,geo;timeseries
+2602.04643v2,2026-02-04,SC-JEPA: Stabilizing Latent Predictive Learning for Time-Series Anomaly Prediction,3,collapse_reg;timeseries
+2602.12408v1,2026-02-12,Detecting Spatiotemporal b-Value Anomalies with a Progressive Deep Learning Architecture,3,geo;timeseries
+2603.01881v1,2026-03-02,Cross-sphere Coupling and Source Inversion of Ionospheric Disturbances Associated with the 2025 Myanmar Strike-slip Earthquake from BeiDou GEO and Multi-GNSS Observations,3,geo;timeseries
+2603.22281v2,2026-03-23,ThinkJEPA: Empowering Latent World Models with Large Vision-Language Reasoning Model,3,hierarchy;timeseries
+2605.00933v1,2026-05-01,CGM-JEPA: Learning Consistent Continuous Glucose Monitor Representations via Predictive Self-Supervised Pretraining,3,collapse_reg;timeseries
+2605.22836v1,2026-05-10,"Real-Time Earthquake Magnitude Classification from Initial P-Waves: Models, Dataset, and Comparative Analysis for South Asia",3,geo;timeseries
+2605.11130v4,2026-05-11,HEPA: A Self-Supervised Horizon-Conditioned Event Predictive Architecture for Time Series,3,timeseries
+2605.16454v1,2026-05-14,QuChaTeR: A Hybrid Quantum-Chaotic Temporal Framework for Earthquake Prediction,3,geo;timeseries
+2605.31580v1,2026-05-29,Giving Sensors a Voice: Multimodal JEPA for Semantic Time-Series Embeddings,3,timeseries
+2606.00694v1,2026-05-30,FROST-STA: Frozen Dense Features for the Ego4D Short-Term Object Interaction Anticipation,3,collapse_reg;timeseries
+2606.07031v1,2026-06-05,CF-JEPA: Mask-free forward prediction with asymmetric encoder utilization for time-series representation learning,3,collapse_reg;timeseries
+2606.28446v1,2026-06-26,Domain-Informed Multi-View Self-Distillation for Astronomical Light-Curve Representation Learning with JEPA,3,collapse_reg;timeseries
+2607.01400v2,2026-07-01,A global predicted-fMRI drive signal from TRIBE does not predict YouTube replay heatmaps,3,collapse_reg;timeseries
+2607.00958v1,2026-07-01,LeNEPA: No-Augmentation Next-Latent Prediction for Time-Series Representation Learning,3,collapse_reg;timeseries
+2607.10450v1,2026-07-11,VORA: Rapid Association of Earthquake Phases from Local to Global,3,geo;timeseries
+2608.00591v2,2026-08-01,Why Does the Future Branch? Identifiable Closure Tests for Stochastic Physical World Models,3,hierarchy;theory;timeseries
+2608.04378v1,2026-08-05,Helping Music Co-Creation Agents 'Listen' Well: Hierarchical Self-Supervised World Models for Understanding and Generation,3,hierarchy;theory;timeseries
+2608.07409v1,2026-08-07,UniJEPA: A Unified Joint-Embedding Predictive Architecture for Task-Agnostic Visual World Modeling,3,collapse_reg;theory;timeseries
+2609.05461v1,2026-08-12,ARC-Bench: Closed-Loop Replanning Masks Broken Action Ranking in Frozen JEPA World Models,3,collapse_reg;theory
+2608.20516v1,2026-08-20,When Graph-JEPA Learns the Wrong Thing: Diagnosing and Repairing Category-Conditional Collapse,3,collapse_reg;hierarchy
+2608.20065v2,2026-08-20,Orthogonal JEPA: Factorized Predictive States for Latent World Models,3,collapse_reg;timeseries
+2608.24093v1,2026-08-25,Joint-Embedding Prediction of Masked Point Tubes for Self-Supervised Learning on 4D Point Cloud Videos,3,collapse_reg;timeseries
+2608.27367v4,2026-08-27,Successive Capacity Growth: Task-Complexity-Driven Width and Depth Expansion for Vision Transformer Encoders in JEPA World Models,3,collapse_reg
+2609.31680v1,2026-09-16,Does Joint-Embedding Predictive Architecture Pretraining Help Time Series Forecasting?,3,timeseries
+2609.21656v1,2026-09-18,Beyond Gaussian Worlds: Latent Geometry Matters for JEPAs,3,collapse_reg;theory
+2609.35603v2,2026-09-28,Control-Geometry Straightening for Sampling-Based Latent Planning,3,theory;timeseries
+2609.38926v1,2026-09-30,PrecipJEPA: JEPA-Regularized Future-State Prediction with Motion-Source Rendering for Precipitation Nowcasting,3,hierarchy;timeseries
+2609.39509v1,2026-09-30,Mathematical Exploration of Wave Motion due to Earth-Space Force (Ground Action) Consequences,3,geo
+2610.02344v1,2026-10-01,Drive vs. Decay: On the Training Dynamics of Joint-Embedding Predictive Architectures,3,collapse_reg;theory
+2610.05409v1,2026-10-04,BeliefGraph-JEPA: Structured Latent World Models for Action-Conditioned Time Series,3,hierarchy;timeseries
+2610.05240v1,2026-10-04,Pythia: Toward Foundation World Models for Multimodal Time Series,3,timeseries
+2610.07006v1,2026-10-04,STOCK-JEPA: Prior-Anchored Latent Revision Representation Learning in Equity Markets,3,collapse_reg;theory;timeseries
+2610.06805v1,2026-10-05,H-JEPA: End-to-End Learning of Hierarchical World Models for Visual Planning,3,hierarchy;timeseries
+2610.07540v1,2026-10-06,Preserving Unstable Modes Through Inverse Dynamics in JEPA World Models,3,collapse_reg;theory
+2610.12349v1,2026-10-08,SplitJEPA: Learning Invariant and Variant Latent Worlds without Reconstruction,3,collapse_reg;theory
+2503.00335v1,2025-03-01,Surrogate Structure-Specific Probabilistic Dynamic Responses of Bridge Portfolios using Deep Learning with Partial Information,2,geo
+2503.13765v1,2025-03-17,Tectonics controls hydration-induced rheological heterogeneities in ultraslow-spread oceanic lithospheres,2,geo
+2503.17148v1,2025-03-21,Seismotectonics and Slip Behavior of a Submarine Plate Boundary Fault from Seismicity Repeaters and Tomography using a high-resolution earthquake catalog from machine learning,2,geo
+2503.20584v1,2025-03-26,A Deep Learning Pipeline for Large Earthquake Analysis using High-Rate Global Navigation Satellite System Data,2,geo
+2506.06939v1,2025-06-07,Towards End-to-End Earthquake Monitoring Using a Multitask Deep Learning Model,2,geo
+2506.14082v3,2025-06-17,Smooth surface reconstruction of earthquake faults from distributed moment-potency-tensor solutions,2,geo
+2507.01260v2,2025-07-02,Automated Classification of Volcanic Earthquakes Using Transformer Encoders: Insights into Data Quality and Model Interpretability,2,geo
+2507.02272v1,2025-07-03,Three-dimensional crustal deformation analysis using physics-informed deep learning,2,geo
+2507.14947v1,2025-07-20,Echoes of the Land: An Interactive Installation Based on Physical Model of Earthquake,2,geo
+2508.12117v2,2025-08-16,SPIDER: Scalable Probabilistic Inference for Differential Earthquake Relocation,2,geo
+2509.02346v2,2025-09-02,Earthquake Source Depth Determination using Single Station Waveforms and Deep Learning,2,geo
+2510.21063v1,2025-10-24,Deep learning-based automated damage detection in concrete structures using images from earthquake events,2,geo
+2511.06621v1,2025-11-10,Spectrum and Physics-Informed Neural Networks (SaPINNs) for Input-State-Parameter Estimation in Dynamic Systems Subjected to Natural Hazards-Induced Excitation,2,geo
+2511.16333v1,2025-11-20,"Beyond Generative AI: World Models for Clinical Prediction, Counterfactuals, and Planning",2,timeseries
+2511.19185v1,2025-11-24,A Deep-Learning-Based Framework for Focal Mechanism Determination and Its Application to the 2022 Luding Earthquake Sequence,2,geo
+2512.07425v2,2025-12-08,Seismic event classification with a lightweight Fourier Neural Operator model,2,geo
+2512.19909v1,2025-12-22,Modeling Non-Ergodic Path Effects Using Conditional Generative Model for Fourier Amplitude Spectra,2,geo
+2602.01269v1,2026-02-01,Evaluating the SAIPy Performance using a Local Seismic Network for Volcano-Tectonic Earthquakes Monitoring,2,geo
+2602.12540v1,2026-02-13,Self-Supervised JEPA-based World Models for LiDAR Occupancy Completion and Forecasting,2,timeseries
+2602.15993v1,2026-02-17,"An Interpretable Physics Informed Multi-Stream Deep Learning Architecture for the Discrimination between Earthquake, Quarry Blast and Noise",2,geo
+2603.03344v1,2026-02-23,GreenPhase: A Green Learning Approach for Earthquake Phase Picking,2,geo
+2603.11108v2,2026-03-11,Enhanced Seismicity Monitoring in the Rapid Scientific Response to the 2025 Santorini Crisis,2,geo
+2603.20048v1,2026-03-20,Structured Latent Dynamics in Wireless CSI via Homomorphic World Models,2,timeseries
+2604.17228v1,2026-04-19,Revisiting Auxiliary Losses for Conditional Depth Routing: An Empirical Study,2,collapse_reg;timeseries
+2605.00126v3,2026-04-30,SPLICE: Latent Diffusion over JEPA Embeddings for Conformal Time-Series Inpainting,2,theory;timeseries
+2606.20627v2,2026-05-26,Latent Goal Prediction from Language for Model-Based Planning,2,hierarchy;timeseries
+2606.05700v1,2026-06-04,T-SAR-JEPA: Self-Supervised Temporal Anomaly Detection in SAR Amplitude Stacks via Latent Prediction,2,timeseries
+2606.05618v1,2026-06-04,Uncovering Extreme Event Mechanisms for Prediction and Control with Sensitivity-Balanced Projections,2,geo;timeseries
+2606.09222v2,2026-06-08,"Absolute Length Sensing in a Long-Baseline, High-Finesse Optical Cavity",2,geo
+2606.16076v1,2026-06-15,Phys-JEPA: Physics-Informed Latent World Models for Multivariate Time-Series Forecasting,2,timeseries
+2608.16287v3,2026-08-17,Reperesentation Geometry Matters for Planning with JEPA World Models,2,collapse_reg;theory
+2608.21160v1,2026-08-21,Human-JEPA: A Human-Centric Vision Model that Perceives and Anticipates,2,collapse_reg;timeseries
+2608.22764v1,2026-08-24,LpWM: A Case for Sparse Representations in World Models,2,collapse_reg
+2608.29434v2,2026-08-29,Does Latent Planning Survive Point Clouds? Action-Conditioned JEPA World Models for Geometric Observations and Goals,2,collapse_reg;timeseries
+2608.30975v1,2026-08-31,MR-JEPA: A General Purpose Video Foundation Model for Cardiac MRI,2,collapse_reg;timeseries
+2609.04264v3,2026-09-02,Spectral-Target Physical Latent Structuring for JEPA-Style World Models,2,collapse_reg
+2609.09630v1,2026-09-09,JEPA Policy: Diffusion-Free Imitation Learning via Paired Action and Future Representation Prediction,2,collapse_reg
+2609.21379v1,2026-09-18,JEPA Guided Diffusion: Predictive Vision-Language Conditioning for Generative Traffic Forecasting,2,collapse_reg;timeseries
+2609.23881v1,2026-09-20,MotionJEPA: Preventing Temporal Feature Collapse by Capturing Visual Changes in Latent Space,2,collapse_reg;timeseries
+2609.32921v2,2026-09-26,Adaptive Latent Capacity for World Models,2,collapse_reg
+2609.33110v1,2026-09-27,D-JEPA: Design-Recoverable JEPA Representation with Swappable Physics Decoders,2,collapse_reg
+2609.33487v1,2026-09-27,What masking geometry works best for EEG foundation models?,2,collapse_reg;timeseries
+2609.34375v1,2026-09-28,LRC-JEPA: Disentangling Dynamics and Residual Context for Efficient World Models,2,collapse_reg;timeseries
+2609.36985v1,2026-09-29,Abductive World Modeling via Causal Representation Learning,2,hierarchy;theory
+2609.37798v1,2026-09-29,GLaS-JEPA: Gaussian-Regularized Speech SSL without Engineered Prediction Targets,2,collapse_reg
+2610.00976v2,2026-10-01,Variational Streaming Flow: Probabilistic Forecasting in Physical Time,2,timeseries
+2610.03374v1,2026-10-02,EVEWorld: Physical Evolution Supervision for Embodied World Models,2,collapse_reg;timeseries
+2610.04778v1,2026-10-03,"Repeated-Measure Leakage, Distribution Shift, and Reliability under Partial Observation in Patient World Models",2,timeseries
+2610.04334v1,2026-10-03,Broadband Ground-Motion Synthesis by Conditioning Denoising Diffusion Models on Low-Frequency Waveforms,2,geo
+2610.05543v1,2026-10-04,AngularWM: Wireless World Modeling for AoA Prediction from Multi-Antenna I/Q,2,collapse_reg;timeseries
+2610.09194v1,2026-10-06,"Patient, Place, Prior (P$^3$): What Counts as Personalization in Medical World Models?",2,collapse_reg;timeseries
+2610.09457v1,2026-10-07,DSReg: Provably Recovering Individual World Latents without Reconstruction,2,collapse_reg;theory
+2511.09783v2,2025-11-12,Koopman Invariants as Drivers of Emergent Time-Series Clustering in Joint-Embedding Predictive Architectures,1,theory
+2602.09985v1,2026-02-10,Online Monitoring Framework for Automotive Time Series Data using JEPA Embeddings,1,timeseries
+2604.22618v1,2026-04-24,Beyond Patient Invariance: Learning Cardiac Dynamics via Action-Conditioned JEPAs,1,collapse_reg
+2605.12241v1,2026-05-12,Pretraining Strategies and Scaling for ECG Foundation Models: A Systematic Study,1,timeseries
+2606.23444v2,2026-06-22,SkyJEPA: Learning Long-Horizon World Models for Zero-Shot Sim-to-Real Control of Quadrotors,1,timeseries
+2607.09749v1,2026-07-03,MorphologyFM: A Foundation Model for Morphology-Aware Representation Learning from ECG and Pulse Oximetry Waveforms,1,timeseries
+2608.04060v1,2026-08-04,SJEPA: Learning Elegant Latent Dynamics with Hybrid Symbolic-Neural Predictors,1,collapse_reg
+2608.05720v2,2026-08-06,PhyLatent: Learning Dynamics-Relevant Representations for JEPA World Models,1,collapse_reg
+2608.12748v1,2026-08-13,Scaling Representation Diversity: Modulated Attention and Reconstructive Regularization for Visual Grounding,1,theory
+2608.22642v4,2026-08-23,Mol-JEPA: A multimodal Joint Embedding Predictive Architecture for Molecules,1,collapse_reg
+2608.22358v1,2026-08-23,Tracing the Unlabeled Storm: Cross-Variable Transfer in a Lagrangian Atmospheric JEPA Framework,1,timeseries
+2608.24044v3,2026-08-25,JEPA-x: Cross-Predictive Physics Grounding for Forecastable Latent Dynamics,1,timeseries
+2608.29029v3,2026-08-29,Flow-JEPA: Robust Latent Dynamics for JEPA World Models via Flow Matching,1,collapse_reg
+2609.03565v2,2026-09-03,Toward Physically Grounded JEPA World Models for Goal-Conditioned Robotic Planning,1,collapse_reg
+2609.04851v1,2026-09-04,Coupled Control and Wireless World Models for Resilient Remote Robotic Control,1,timeseries
+2609.13595v1,2026-09-11,Predictive audio representations for early detection and tracking of hidden dynamic objects,1,timeseries
+2609.16071v2,2026-09-13,World Models for Cross-Machine CNC Transfer under Partial Sensor Overlap,1,timeseries
+2609.16551v1,2026-09-15,Which Pretext Task Transfers? Self-Supervised Pretraining Objectives for Lung Ultrasound,1,collapse_reg
+2609.20800v1,2026-09-17,JEPA-Anything: Learning Predictive Models across Different Worlds,1,timeseries
+2609.22674v1,2026-09-19,Mask-Aware Execution for Efficient JEPA Training,1,timeseries
+2609.24749v1,2026-09-21,D-JEPA: A Decision-Aligned Latent World Model,1,theory
+2609.23983v1,2026-09-21,Evaluating the Generalization of Neuroimaging Foundation Models on African Brain MRI,1,collapse_reg
+2609.25541v1,2026-09-22,A JEPA Recipe for Tabular Foundation Models,1,collapse_reg
+2609.26299v2,2026-09-22,ForeDrive: Foresight-Guided End-to-End Autonomous Driving with a Planning-Relevant Latent World Model,1,timeseries
+2609.27455v2,2026-09-23,Latent evolving World Action Model,1,theory
+2609.29403v1,2026-09-24,RD-JEPA: Predictive latent pretraining for few-trajectory transfer across reaction--diffusion equations,1,timeseries
+2609.30264v2,2026-09-24,AD-WM: Action-Discriminative World Models for Counterfactual Model Predictive Control,1,collapse_reg
+2609.30214v1,2026-09-24,Underwater C3-JEPA: An Object-Centric Cross-View World Model for ROV Salvage,1,collapse_reg
+2609.31868v1,2026-09-25,Metro-WM: Long-Horizon Latent Planning with Realisable Sub-Goals,1,hierarchy
+2609.31161v1,2026-09-25,I Act Therefore I Am: When Is JEPA's Action-Conditioning Enough to Learn Causal Mechanisms?,1,theory
+2609.32928v1,2026-09-26,Phenomenon-Graph JEPA: Label-Efficient Representation Learning for Contactless Cardiorespiratory Sensing,1,timeseries
+2609.32193v2,2026-09-26,Devol-ONE: One Autoregressive Mixture of Transformers to Unify Vision-Language-Action and Latent World Modeling,1,timeseries
+2609.33000v1,2026-09-26,"TriDrive: Joint Driver, Vehicle, and Road Modeling for Forecasting and Driver Monitoring",1,timeseries
+2609.34085v1,2026-09-28,AD-E2E-JEPA: A Joint-Embedding Predictive Architecture For End-to-End Autonomous Driving,1,collapse_reg
+2609.36305v1,2026-09-28,Bilinear World Models: Learning Representations with Structured Dynamics for Efficient Control,1,collapse_reg
+2609.36438v1,2026-09-29,World4Scorer: Outcome-Grounded World Modeling for Autonomous Driving,1,collapse_reg
+2610.00722v1,2026-09-30,JEPA-TTT: Persistent Test-Time Training of Latent World Models for Planning under Dynamics Shifts,1,timeseries
+2609.40129v1,2026-09-30,VR-JEPA: Learning Contrastive-State Latent Guidance for Generation-based Video Reasoning,1,timeseries
+2610.00727v1,2026-09-30,CF-JEPA: Improving Robustness of JEPA World Models via Controllability Factorization,1,collapse_reg
+2609.39235v1,2026-09-30,The Planning Limits of Latent World Models,1,collapse_reg
+2609.38927v1,2026-09-30,World-as-Graph: Relational World Modeling Through Latent Space Graphs,1,timeseries
+2610.03587v1,2026-10-02,AVL-JEPA: Preventing Causal Dynamics Information Collapse In Joint Embedding Predictive Architecture World Models,1,collapse_reg
+2610.03106v1,2026-10-02,S2S-JEPA: Predicting the Predictable at Subseasonal-to-Seasonal Timescales,1,timeseries
+2610.02922v1,2026-10-02,TwinJEPA: Action-Preferred Predictive Representations for Goal-Conditioned Control,1,timeseries
+2610.02864v1,2026-10-02,NeuroLens: Learning Latent Embeddings of Neural Semantics from Chronic Recordings,1,timeseries
+2610.10571v1,2026-10-04,SPERA: Spherical Prior EEG Foundation Model with Geometry- and Frequency-Aware Latent Prediction,1,timeseries
+2610.05043v1,2026-10-04,CI-JEPA: A Counterfactual Analysis of Latent Representations in Joint-Embedding Predictive Architectures for Self-Supervised Learning,1,theory
+2610.05731v1,2026-10-05,T-JEPA: A Temporal Joint-Embedding Predictive Architecture for Learning Better Remote Sensing Representations,1,timeseries
+2610.09940v1,2026-10-07,Juno: Taming Predictive Latents for Vision-Language-Action Models,1,collapse_reg
+2610.12818v1,2026-10-08,LeWAM: End-to-End World and Action Modeling with JEPAs,1,collapse_reg
+2610.13315v1,2026-10-09,JEPA-kMMVAE: CSI Prediction for Time-Varying Wireless Channels,1,timeseries

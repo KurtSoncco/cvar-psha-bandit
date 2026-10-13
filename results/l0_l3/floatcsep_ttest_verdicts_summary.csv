@@ -1,0 +1,3 @@
+test_type,better,indistinguishable,worse,n
+T-test_vs_ETAS,3,27,41,71
+T-test_vs_GR,0,15,56,71

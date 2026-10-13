@@ -49,6 +49,15 @@ PyTorch hierarchical JEPA for catalogue histories. Its rate head guarantees
 that the regional expected rate equals the sum over spatial/magnitude cells;
 `forecast.dat` is compatible with floatCSEP's gridded forecast format.
 
+The encoder's latent is horizon-agnostic; horizon conditioning happens only at
+decode time (`EQJEPA.forecast_rates(batch, horizon_days=...)`), so one trained
+model can be queried at any requested horizon post-hoc -- e.g. writing a 1-day
+and a 30-day forecast from the same forward pass (`train.write_forecast`
+does exactly this, one `forecast_h{H}d.dat` file per horizon). The count head
+is Negative-Binomial, not Poisson: earthquake counts are over-dispersed from
+spatial-temporal clustering, so `forecast.dat` carries an `nb_dispersion`
+column alongside `rate`.
+
 ```bash
 pip install -e .
 eq-jepa --config experiments/eq_jepa/config.yaml
@@ -56,12 +65,64 @@ docker build -t eq-jepa .
 docker run --rm -v "$PWD/results:/app/results" eq-jepa --config experiments/eq_jepa/config.yaml
 ```
 
-Catalog source adapters are explicit: `iris` and `epos` query standard FDSN
-event endpoints; `kiknet` consumes an approved local/exported CSV with
+Catalog source adapters are explicit: `usgs` and `epos` query standard FDSN
+event endpoints (`service.iris.edu/fdsnws/event` was retired by EarthScope in
+2023 and is no longer supported; use `usgs` instead); `kiknet` consumes an
+approved local/exported CSV with
 `time,latitude,longitude,depth_km,magnitude[,event_id]`. KiK-net waveform
 archive access is not scraped. The provided `HistoricalRateBaseline` and
 `ETASLiteBaseline` are transparent CSEP-ready baselines; the latter is a
 simple triggering benchmark, not a substitute for calibrated ETAS software.
+
+### L0–L3 build & validation (branch `filippo-l0-l3-validated`)
+
+A first end-to-end pass through four of the six planned layers — L0 (Hierarchical
+JEPA seismicity forecaster), L1 (floatCSEP evaluation), L2 (physics-based ground-motion
+scenario generator), L3 (nonlinear SDOF response) — was built and scored against real
+data: USGS/ANSS California catalog, M2.8+, 2019–2024, 71 rolling monthly floatCSEP
+windows. Full writeup: [`docs/l0_l3/L0_L3_verification_report.md`](docs/l0_l3/L0_L3_verification_report.md);
+the layered L0→L5 framework connecting this build to floatCSEP, CVaR, and the
+constrained bandit/MPC decision layer is in
+[`docs/l0_l3/EQ-JEPA_sequential_definition.md`](docs/l0_l3/EQ-JEPA_sequential_definition.md);
+slide deck: [`docs/l0_l3/EQ-JEPA_L0-L3_presentation.pptx`](docs/l0_l3/EQ-JEPA_L0-L3_presentation.pptx).
+
+**Two catalog bugs were found and fixed during L1 validation**, both upstream of any
+model:
+
+1. *Aftershock contamination* — the independent-events filter was computed but never
+   applied before scoring, leaving floatCSEP scored against the raw clustered catalog
+   (monthly count dispersion 379.5x Poisson).
+2. *Declustering formula error* — a hand-coded Gardner–Knopoff window had swapped
+   space/time coefficients for M≥6.5, fabricating multi-year gaps that read as real
+   seismic quiescence (residual dispersion 10.5x Poisson even after "fixing" bug 1).
+
+Re-declustering with the vetted `seismostats` port of OpenQuake HMTK's Gardner–Knopoff
+implementation collapsed dispersion to **0.94x Poisson** — effectively the Poisson
+regime L0's count head already assumes. Corrected catalog: 19,152 events, 5,491
+independent mainshocks, 13,661 aftershock/cluster-flagged; Gutenberg–Richter b-value
+0.93 (raw) → 0.84 (declustered).
+
+**With the catalog fixed**, the previously "universal" N-test failure turned out to be
+a genuine mean-rate deficit shared by all three models (observed mean 16.8
+events/window vs. L0's 4.8, Historical-GR's 5.2, ETAS-lite's 7.5) — not overdispersion,
+and not something a negative-binomial count head alone would fix. A minimal 2-parameter
+Hawkes-like multiplicative rate correction on L0 (amplitude 0.20, decay tau=5.1 days,
+fit by Poisson-likelihood MLE against recent seismicity) raised L0's N-test pass rate
+from 5.6% to 53.5%, and flipped its comparative T-test standing from losing to both
+baselines in the majority of windows to beating both in roughly a third of them
+(24 better / 45 tied / 2 worse vs. ETAS-lite; 25/42/4 vs. Historical-GR). M-test
+(spatial/magnitude shape) passed in 73–97% of windows throughout — relative
+spatial-magnitude structure was never the problem.
+
+Curated code, docs, results, and the trained checkpoint from this build live under
+[`results/l0_l3/`](results/l0_l3/README.md) and
+[`docs/l0_l3/`](docs/l0_l3/L0_L3_verification_report.md); see that directory's README
+for what is (and, deliberately, is not) checked in.
+
+**Open caveat carried forward**: the T-test comparisons above apply the rate
+correction to L0 only, against *uncorrected* GR/ETAS-lite baselines. Whether the
+baselines' own rate deficits are fixable artifacts (in which case the comparison
+should be redone symmetrically) or a genuine skill difference is unresolved.
 
 ## Run experiments
 

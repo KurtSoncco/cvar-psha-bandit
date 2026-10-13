@@ -55,14 +55,15 @@ class FDSNEventClient:
         return _parse_fdsn_text(text)
 
 
-class KikNetCatalogClient:
-    """KiK-net/K-NET catalogue adapter for an exported CSV or approved URL.
+class CSVCatalogClient:
+    """Shared CSV-loading logic for catalog sources with no live FDSN feed.
 
-    NIED's waveform archive has access/usage rules and no stable public FDSN event
-    endpoint. This adapter deliberately does not scrape it: provide an exported
-    event CSV (or a project-approved CSV URL) with the documented columns.
+    Subclasses only differ in the error message / doc string, since the
+    required standardized column set (``time, latitude, longitude, depth_km,
+    magnitude`` plus an optional ``event_id``) is the same either way.
     """
     required = {"time", "latitude", "longitude", "depth_km", "magnitude"}
+    label = "CSV"
 
     def fetch_csv(self, source: str | Path) -> list[EarthquakeEvent]:
         source = str(source)
@@ -73,7 +74,7 @@ class KikNetCatalogClient:
             raw = Path(source).read_text(encoding="utf-8")
         rows = csv.DictReader(io.StringIO(raw))
         if not rows.fieldnames or not self.required.issubset(set(rows.fieldnames)):
-            raise ValueError(f"KiK-net CSV needs columns {sorted(self.required)}")
+            raise ValueError(f"{self.label} CSV needs columns {sorted(self.required)}")
         return [
             EarthquakeEvent(_parse_time(r["time"]), float(r["latitude"]), float(r["longitude"]),
                             float(r["depth_km"]), float(r["magnitude"]), r.get("event_id", ""))
@@ -81,20 +82,60 @@ class KikNetCatalogClient:
         ]
 
 
-def get_catalog_client(name: str) -> FDSNEventClient | KikNetCatalogClient:
+class KikNetCatalogClient(CSVCatalogClient):
+    """KiK-net/K-NET catalogue adapter for an exported CSV or approved URL.
+
+    NIED's waveform archive has access/usage rules and no stable public FDSN event
+    endpoint. This adapter deliberately does not scrape it: provide an exported
+    event CSV (or a project-approved CSV URL) with the documented columns.
+    """
+    label = "KiK-net"
+
+
+class LocalCatalogClient(CSVCatalogClient):
+    """Adapter for a previously-fetched, standardized-column catalog CSV.
+
+    Use this to retrain/rerun deterministically against a frozen snapshot of a
+    live source (e.g. the USGS pull cached for this project) without re-issuing
+    network queries on every run. The CSV must already be in the standardized
+    ``time, latitude, longitude, depth_km, magnitude[, event_id]`` schema --
+    see ``write_standard_csv`` for producing one from a list of events.
+    """
+    label = "local catalog"
+
+
+def write_standard_csv(events: list[EarthquakeEvent], path: str | Path) -> None:
+    """Write events to the standardized CSV schema ``LocalCatalogClient`` reads back."""
+    with Path(path).open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["time", "latitude", "longitude", "depth_km", "magnitude", "event_id"])
+        for e in events:
+            w.writerow([e.time.isoformat(), e.latitude, e.longitude, e.depth_km, e.magnitude, e.event_id])
+
+
+def get_catalog_client(name: str) -> FDSNEventClient | KikNetCatalogClient | LocalCatalogClient:
     """Return the named supported source adapter.
 
-    ``iris`` uses EarthScope/IRIS FDSN; ``epos`` uses the EMSC FDSN endpoint
-    integrated with EPOS. ``kiknet`` expects a user-supplied exported CSV.
+    ``usgs`` uses the USGS ComCat FDSN event service (global, includes the ANSS
+    composite catalog used for California); ``epos`` uses the EMSC FDSN endpoint
+    integrated with EPOS (Europe-Mediterranean). ``kiknet`` expects a
+    user-supplied exported CSV. ``local`` expects a previously-cached,
+    standardized-schema CSV (see ``write_standard_csv``/``LocalCatalogClient``).
+
+    NOTE: EarthScope/IRIS retired ``service.iris.edu/fdsnws/event`` (returns
+    HTTP 410 Gone as of 2023); the former ``iris`` adapter has been removed.
+    Use ``usgs`` for a global/California catalog instead.
     """
     key = name.lower()
-    if key == "iris":
-        return FDSNEventClient("https://service.iris.edu/fdsnws/event/1")
+    if key == "usgs":
+        return FDSNEventClient("https://earthquake.usgs.gov/fdsnws/event/1")
     if key == "epos":
         return FDSNEventClient("https://www.seismicportal.eu/fdsnws/event/1")
     if key in {"kiknet", "k-net", "knet"}:
         return KikNetCatalogClient()
-    raise ValueError("source must be iris, epos, or kiknet")
+    if key in {"local", "cached"}:
+        return LocalCatalogClient()
+    raise ValueError("source must be usgs, epos, kiknet, or local")
 
 
 def _parse_time(value: str) -> datetime:

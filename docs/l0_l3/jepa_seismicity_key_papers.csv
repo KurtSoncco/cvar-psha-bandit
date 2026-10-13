@@ -1,0 +1,19 @@
+arxiv_id,date,title,first_author,n_authors,primary_cat,url
+2610.06805,2026-10-05,H-JEPA: End-to-End Learning of Hierarchical World Models for Visual Planning,Wancong Zhang,5,cs.LG,https://arxiv.org/abs/2610.06805
+2609.37441,2026-09-29,Anisotropic Representations Improve Planning in JEPA World Models,Mingu Kang,4,cs.RO,https://arxiv.org/abs/2609.37441
+2609.35288,2026-09-28,$λ$-JEPA Spectral Anti-Collapse Regularization for Self-Supervised Learning,Berker Demirel,6,cs.LG,https://arxiv.org/abs/2609.35288
+2609.36227,2026-09-28,One-Step Next-Latent Prediction Is Not a World Model,Shitong Wang,3,stat.ML,https://arxiv.org/abs/2609.36227
+2609.33497,2026-09-27,Hamiltonian JEPA: Action-Conditioned World Models with an Inherited Control State,Tamim Zoabi,3,cs.LG,https://arxiv.org/abs/2609.33497
+2609.17029,2026-09-15,Distributed JEPA: A Self-Supervised Framework for Energy Forecasting,Liana Toderean,6,cs.LG,https://arxiv.org/abs/2609.17029
+2608.18791,2026-08-19,Scaling-law-informed neural point processes for earthquake sequence forecasting,Tianlu Xiong,6,physics.geo-ph,https://arxiv.org/abs/2608.18791
+2608.17542,2026-08-18,No Gaussian Required: Contrastive Inverse Dynamics for JEPA World Models,Jack Boylan,2,cs.LG,https://arxiv.org/abs/2608.17542
+2607.24109,2026-07-27,Earthquake Aftershock Forecasting using Conditional Generative Models,Weiqiang Zhu,1,physics.geo-ph,https://arxiv.org/abs/2607.24109
+2607.01145,2026-07-01,Hierarchical Self-Supervised Representation Learning Framework for Multivariate Time Series Grounded in ECG Analysis,Siwon Kim,1,cs.LG,https://arxiv.org/abs/2607.01145
+2606.10069,2026-06-08,Using Seismic Statistical Features and VQ-VAE to Improve Spatiotemporal Seismicity Predictability,Wei Quan,2,cs.LG,https://arxiv.org/abs/2606.10069
+2605.21437,2026-05-20,Neural Negative Binomial Regression for Weekly Seismicity Forecasting: Per-Cell Dispersion Estimation and Tail Risk Assessment,Alim Igilik,1,physics.geo-ph,https://arxiv.org/abs/2605.21437
+2603.20111,2026-03-20,Var-JEPA: A Variational Formulation of the Joint-Embedding Predictive Architecture - Bridging Predictive and Generative Self-Supervised Learning,Moritz Gögl,2,cs.LG,https://arxiv.org/abs/2603.20111
+2603.03079,2026-03-03,Probabilistic and Alarm-Based Evaluation of a b-Value-Driven Deep Learning Earthquake Forecast,Jonas Köhler,5,physics.geo-ph,https://arxiv.org/abs/2603.03079
+2602.04643,2026-02-04,SC-JEPA: Stabilizing Latent Predictive Learning for Time-Series Anomaly Prediction,Yanan He,4,cs.LG,https://arxiv.org/abs/2602.04643
+2511.08544,2025-11-11,LeJEPA: Provable and Scalable Self-Supervised Learning Without the Heuristics,Randall Balestriero,2,cs.LG,https://arxiv.org/abs/2511.08544
+2509.14661,2025-09-18,"Neural Earthquake Forecasting with Minimal Information: Limits, Interpretability, and the Role of Markov Structure",Jonas Koehler,6,physics.geo-ph,https://arxiv.org/abs/2509.14661
+2505.15588,2025-05-21,EPBench: A Benchmark for Short-term Earthquake Prediction with Neural Networks,Zhiyu Xu,2,physics.geo-ph,https://arxiv.org/abs/2505.15588

@@ -1,0 +1,18 @@
+{
+  "number": {
+    "statistic": 0.08726760563380281,
+    "quantile": 0.6202598492881395
+  },
+  "spatial": {
+    "statistic": 0.7810704225352112,
+    "quantile": 2.2377497070117784e-46
+  },
+  "magnitude": {
+    "statistic": 0.1511267605633803,
+    "quantile": 0.0701049381071101
+  },
+  "pseudolikelihood": {
+    "statistic": 0.3288732394366197,
+    "quantile": 2.424250937102073e-07
+  }
+}

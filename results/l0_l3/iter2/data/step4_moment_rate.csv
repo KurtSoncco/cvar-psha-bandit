@@ -1,0 +1,24 @@
+source,moment_rate_Nm_per_yr,note
+observed (declustered catalog),1.0822795539286338e+19,"1215 independent events, 5.92 yr"
+"observed (full catalog, incl. aftershocks)",1.2559636158829074e+19,5731 events; aftershocks carry real moment
+EQJEPA_L0_original,4.118301246278348e+19,"Kostrov, b from catalog"
+EQJEPA_L0_original [b=1.0],2.0626289503765553e+19,sensitivity to b
+EQJEPA_L0_original [top bin truncated at 7.5],8.924712208930402e+18,sensitivity to upper truncation
+HistoricalRateGR,6.150044063784846e+19,"Kostrov, b from catalog"
+HistoricalRateGR [b=1.0],3.0773809942048645e+19,sensitivity to b
+HistoricalRateGR [top bin truncated at 7.5],1.3272887347138777e+19,sensitivity to upper truncation
+ETASLite,6.932409385207666e+20,"Kostrov, b from catalog"
+ETASLite [b=1.0],3.458400919258318e+20,sensitivity to b
+ETASLite [top bin truncated at 7.5],1.47579253461787e+20,sensitivity to upper truncation
+A_original,5.27256790378332e+19,"Kostrov, b from catalog"
+A_original [b=1.0],2.638295374660403e+19,sensitivity to b
+A_original [top bin truncated at 7.5],1.1378762566542905e+19,sensitivity to upper truncation
+B_original_sigreg,6.995127845777303e+19,"Kostrov, b from catalog"
+B_original_sigreg [b=1.0],3.498508636744081e+19,sensitivity to b
+B_original_sigreg [top bin truncated at 7.5],1.5062860002230925e+19,sensitivity to upper truncation
+C_fixed_embedding,2.751186725842306e+20,"Kostrov, b from catalog"
+C_fixed_embedding [b=1.0],1.3739808457419473e+20,sensitivity to b
+C_fixed_embedding [top bin truncated at 7.5],5.885761957293097e+19,sensitivity to upper truncation
+D_fixed_sigreg,2.6544123134089154e+20,"Kostrov, b from catalog"
+D_fixed_sigreg [b=1.0],1.325649828475197e+20,sensitivity to b
+D_fixed_sigreg [top bin truncated at 7.5],5.67871307554861e+19,sensitivity to upper truncation

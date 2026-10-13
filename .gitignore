@@ -16,3 +16,6 @@ results/**
 *.png
 *.pdf
 .ipynb_checkpoints/
+
+# L0-L3 build: this subtree's curated data/figures/model ARE tracked (see results/l0_l3/README.md)
+!results/l0_l3/**
